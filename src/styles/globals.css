@@ -1,0 +1,246 @@
+:root {
+  --font-size: 16px;
+  
+  /* Day Foundry Design Tokens - Light Theme */
+  --df-surface: #FFFFFF;
+  --df-surface-alt: #F7F8FA;
+  --df-elev-1: #FFFFFF;
+  --df-text: #0B1320;
+  --df-text-muted: #5B6472;
+  --df-primary: #2563EB;
+  --df-primary-contrast: #FFFFFF;
+  --df-success: #16A34A;
+  --df-warning: #D97706;
+  --df-danger: #DC2626;
+  --df-border: #E5E7EB;
+  
+  /* Elevation (shadows) */
+  --df-shadow-sm: 0 1px 2px rgba(0,0,0,0.08);
+  --df-shadow-md: 0 4px 12px rgba(0,0,0,0.12);
+  --df-shadow-lg: 0 8px 24px rgba(0,0,0,0.14);
+  
+  /* Spacing */
+  --df-space-4: 4px;
+  --df-space-8: 8px;
+  --df-space-12: 12px;
+  --df-space-16: 16px;
+  --df-space-24: 24px;
+  --df-space-32: 32px;
+  --df-space-40: 40px;
+  --df-space-48: 48px;
+  
+  /* Radius */
+  --df-radius-sm: 8px;
+  --df-radius-md: 12px;
+  --df-radius-pill: 999px;
+  
+  /* Typography */
+  --df-type-display-size: 1.75rem;
+  --df-type-display-weight: 600;
+  --df-type-title-size: 1.25rem;
+  --df-type-title-weight: 600;
+  --df-type-subtitle-size: 1.125rem;
+  --df-type-subtitle-weight: 500;
+  --df-type-body-size: 1rem;
+  --df-type-body-weight: 400;
+  --df-type-caption-size: 0.875rem;
+  --df-type-caption-weight: 500;
+  
+  /* Motion */
+  --df-anim-fast: 120ms;
+  --df-anim-med: 200ms;
+  --df-anim-slow: 280ms;
+  
+  /* Legacy tokens for compatibility - using standard hex colors */
+  --background: #ffffff;
+  --foreground: #0B1320;
+  --card: #ffffff;
+  --card-foreground: #0B1320;
+  --popover: #ffffff;
+  --popover-foreground: #0B1320;
+  --primary: #2563EB;
+  --primary-foreground: #ffffff;
+  --secondary: #F7F8FA;
+  --secondary-foreground: #0B1320;
+  --muted: #F7F8FA;
+  --muted-foreground: #5B6472;
+  --accent: #e9ebef;
+  --accent-foreground: #0B1320;
+  --destructive: #DC2626;
+  --destructive-foreground: #ffffff;
+  --border: #E5E7EB;
+  --input: transparent;
+  --input-background: #F7F8FA;
+  --switch-background: #E5E7EB;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #2563EB;
+  --chart-1: #2563EB;
+  --chart-2: #16A34A;
+  --chart-3: #D97706;
+  --chart-4: #DC2626;
+  --chart-5: #8B5CF6;
+  --radius: 0.625rem;
+  --sidebar: #F7F8FA;
+  --sidebar-foreground: #0B1320;
+  --sidebar-primary: #2563EB;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e9ebef;
+  --sidebar-accent-foreground: #0B1320;
+  --sidebar-border: #E5E7EB;
+  --sidebar-ring: #2563EB;
+}
+
+.dark {
+  /* Day Foundry Design Tokens - Dark Theme */
+  --df-surface: #0F1115;
+  --df-surface-alt: #171A20;
+  --df-elev-1: #171A20;
+  --df-text: #F6F7F9;
+  --df-text-muted: #A8B0BD;
+  --df-primary: #3B82F6;
+  --df-primary-contrast: #0B1320;
+  --df-success: #22C55E;
+  --df-warning: #F59E0B;
+  --df-danger: #F87171;
+  --df-border: #2A2F39;
+  
+  /* Legacy tokens for compatibility - using standard hex colors */
+  --background: #0F1115;
+  --foreground: #F6F7F9;
+  --card: #171A20;
+  --card-foreground: #F6F7F9;
+  --popover: #171A20;
+  --popover-foreground: #F6F7F9;
+  --primary: #3B82F6;
+  --primary-foreground: #0B1320;
+  --secondary: #2A2F39;
+  --secondary-foreground: #F6F7F9;
+  --muted: #2A2F39;
+  --muted-foreground: #A8B0BD;
+  --accent: #2A2F39;
+  --accent-foreground: #F6F7F9;
+  --destructive: #F87171;
+  --destructive-foreground: #0B1320;
+  --border: #2A2F39;
+  --input: #2A2F39;
+  --ring: #3B82F6;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: #3B82F6;
+  --chart-2: #22C55E;
+  --chart-3: #F59E0B;
+  --chart-4: #F87171;
+  --chart-5: #8B5CF6;
+  --sidebar: #171A20;
+  --sidebar-foreground: #F6F7F9;
+  --sidebar-primary: #3B82F6;
+  --sidebar-primary-foreground: #0B1320;
+  --sidebar-accent: #2A2F39;
+  --sidebar-accent-foreground: #F6F7F9;
+  --sidebar-border: #2A2F39;
+  --sidebar-ring: #3B82F6;
+}
+
+/* Base styling without @layer to prevent compatibility issues */
+* {
+  border-color: var(--df-border);
+  outline-color: rgba(0, 0, 0, 0.5);
+}
+
+body {
+  background-color: var(--df-surface);
+  color: var(--df-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Base typography using Day Foundry tokens */
+h1 {
+  font-size: var(--df-type-display-size);
+  font-weight: var(--df-type-display-weight);
+  line-height: 1.3;
+  color: var(--df-text);
+}
+
+h2 {
+  font-size: var(--df-type-title-size);
+  font-weight: var(--df-type-title-weight);
+  line-height: 1.3;
+  color: var(--df-text);
+}
+
+h3 {
+  font-size: var(--df-type-subtitle-size);
+  font-weight: var(--df-type-subtitle-weight);
+  line-height: 1.4;
+  color: var(--df-text);
+}
+
+h4, h5, h6 {
+  font-size: var(--df-type-body-size);
+  font-weight: var(--df-type-body-weight);
+  line-height: 1.4;
+  color: var(--df-text);
+}
+
+p {
+  font-size: var(--df-type-body-size);
+  font-weight: var(--df-type-body-weight);
+  line-height: 1.5;
+  color: var(--df-text);
+}
+
+label {
+  font-size: var(--df-type-body-size);
+  font-weight: var(--df-type-body-weight);
+  line-height: 1.4;
+  color: var(--df-text);
+}
+
+button {
+  font-size: var(--df-type-body-size);
+  font-weight: var(--df-type-body-weight);
+  line-height: 1.4;
+}
+
+input, textarea, select {
+  font-size: var(--df-type-body-size);
+  font-weight: var(--df-type-body-weight);
+  line-height: 1.4;
+  color: var(--df-text);
+}
+
+small, .caption {
+  font-size: var(--df-type-caption-size);
+  font-weight: var(--df-type-caption-weight);
+  line-height: 1.3;
+  color: var(--df-text-muted);
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+/* Day Foundry utility classes */
+.df-surface { background-color: var(--df-surface); }
+.df-surface-alt { background-color: var(--df-surface-alt); }
+.df-text { color: var(--df-text); }
+.df-text-muted { color: var(--df-text-muted); }
+.df-primary { color: var(--df-primary); }
+.df-primary-bg { background-color: var(--df-primary); }
+.df-border { border-color: var(--df-border); }
+
+/* Focus and hover states */
+.df-focus-ring:focus {
+  outline: 2px solid var(--df-primary);
+  outline-offset: 2px;
+}
+
+/* Responsive design helpers */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
