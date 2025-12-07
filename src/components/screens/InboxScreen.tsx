@@ -168,8 +168,15 @@ export const InboxScreen = forwardRef<InboxScreenRef>((props, ref) => {
           <CaptureInputs onCapture={handleCapture} inputRef={captureInputRef} />
         </div>
 
-        {/* Filter Tabs */}
-        <div className="flex space-x-2 px-4 mb-4">
+        {/* Filter Tabs - Horizontally scrollable on mobile */}
+        <div
+          className="flex gap-2 px-4 mb-4 overflow-x-auto"
+          style={{
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
           <FilterTab
             label="All"
             isActive={activeFilter === 'all'}

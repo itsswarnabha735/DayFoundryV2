@@ -515,11 +515,11 @@ function TaskItem({ task, isOverdue }: TaskItemProps) {
   const getOverdueText = () => {
     if (!isOverdue) return null;
     const createdDate = new Date(task.created_at);
-    return `Overdue since ${createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    return `Since ${createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
   };
 
   return (
-    <div className="flex items-start space-x-3 py-1">
+    <div className="flex items-start space-x-2 py-1.5">
       <div
         className="flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5"
         style={{
@@ -546,19 +546,21 @@ function TaskItem({ task, isOverdue }: TaskItemProps) {
             fontSize: 'var(--df-type-body-size)',
             color: isCompleted ? 'var(--df-text-muted)' : 'var(--df-text)',
             display: 'block',
-            marginBottom: '4px'
+            marginBottom: '3px',
+            lineHeight: '1.4'
           }}
         >
           {task.title}
         </span>
 
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-1.5 items-center">
           {isOverdue && (
             <span
               style={{
-                fontSize: '11px',
+                fontSize: '10px',
                 color: 'var(--df-danger)',
-                fontWeight: 500
+                fontWeight: 500,
+                whiteSpace: 'nowrap'
               }}
             >
               {getOverdueText()}
@@ -567,11 +569,13 @@ function TaskItem({ task, isOverdue }: TaskItemProps) {
 
           {estimateText && (
             <div
-              className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+              className="px-1.5 py-0.5 rounded font-medium"
               style={{
                 backgroundColor: 'var(--df-surface-alt)',
                 color: 'var(--df-text-muted)',
-                border: '1px solid var(--df-border)'
+                border: '1px solid var(--df-border)',
+                fontSize: '10px',
+                lineHeight: '1.2'
               }}
             >
               {estimateText}
@@ -580,11 +584,13 @@ function TaskItem({ task, isOverdue }: TaskItemProps) {
 
           {task.energy && (
             <div
-              className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+              className="px-1.5 py-0.5 rounded font-medium"
               style={{
-                backgroundColor: task.energy === 'deep' ? 'var(--df-surface-alt)' : 'var(--df-surface-alt)',
+                backgroundColor: 'var(--df-surface-alt)',
                 color: task.energy === 'deep' ? 'var(--df-primary)' : 'var(--df-text-muted)',
-                border: '1px solid var(--df-border)'
+                border: '1px solid var(--df-border)',
+                fontSize: '10px',
+                lineHeight: '1.2'
               }}
             >
               {task.energy.charAt(0).toUpperCase() + task.energy.slice(1)}

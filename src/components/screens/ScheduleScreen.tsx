@@ -712,62 +712,66 @@ export function ScheduleScreen() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top App Bar */}
+      {/* Top App Bar - Mobile Responsive */}
       <div
-        className="flex items-center justify-between px-4 py-3 border-b gap-4"
+        className="flex flex-col px-3 py-2 border-b"
         style={{
           backgroundColor: 'var(--df-surface)',
           borderBottomColor: 'var(--df-border)',
-          paddingTop: 'calc(env(safe-area-inset-top, 0) + 12px)',
-          minHeight: '56px'
+          paddingTop: 'calc(env(safe-area-inset-top, 0) + 8px)',
         }}
       >
-        {/* Left: Title */}
-        <div className="flex items-center gap-2 shrink-0">
-          <h1 className="text-xl font-bold" style={{ color: 'var(--df-text)' }}>Schedule</h1>
+        {/* First Row: Title and Date Navigation */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          {/* Left: Title */}
+          <div className="flex items-center gap-1 shrink-0">
+            <h1 className="text-lg font-bold" style={{ color: 'var(--df-text)' }}>Schedule</h1>
+          </div>
+
+          {/* Center: Date Navigation */}
+          <div className="flex items-center gap-0.5 flex-1 justify-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigateDate('prev')}
+              className="h-8 w-8"
+              style={{ color: 'var(--df-text-muted)' }}
+            >
+              <ChevronLeft size={16} />
+            </Button>
+
+            <span
+              className="text-sm font-medium text-center whitespace-nowrap"
+              style={{ color: 'var(--df-text)', minWidth: '100px' }}
+            >
+              {formattedDate}
+            </span>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigateDate('next')}
+              className="h-8 w-8"
+              style={{ color: 'var(--df-text-muted)' }}
+            >
+              <ChevronRight size={16} />
+            </Button>
+          </div>
+
+          {/* Right: Conflict check button */}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => checkForConflicts()}
-            className="h-8 w-8"
+            className="h-8 w-8 shrink-0"
             style={{ color: 'var(--df-text-muted)' }}
           >
             <AlertTriangle className="w-4 h-4" />
           </Button>
         </div>
 
-        {/* Center: Date Navigation */}
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigateDate('prev')}
-            className="h-9 w-9"
-            style={{ color: 'var(--df-text-muted)' }}
-          >
-            <ChevronLeft size={18} />
-          </Button>
-
-          <span
-            className="text-sm font-medium min-w-[120px] text-center"
-            style={{ color: 'var(--df-text)' }}
-          >
-            {formattedDate}
-          </span>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigateDate('next')}
-            className="h-9 w-9"
-            style={{ color: 'var(--df-text-muted)' }}
-          >
-            <ChevronRight size={18} />
-          </Button>
-        </div>
-
-        {/* Right: Status & Actions */}
-        <div className="flex items-center gap-1 shrink-0">
+        {/* Second Row: Status & Actions */}
+        <div className="flex items-center justify-between gap-2">
           {/* Calendar Status Chip */}
           <Badge
             variant="outline"
@@ -783,6 +787,7 @@ export function ScheduleScreen() {
                 : calendarLastRefreshed
                   ? 'var(--df-success)'
                   : 'var(--df-text-muted)',
+              fontSize: '11px'
             }}
           >
             {isLoadingCalendar ? (
@@ -790,67 +795,77 @@ export function ScheduleScreen() {
             ) : (
               <Calendar size={10} />
             )}
-            {isLoadingCalendar
-              ? 'Syncing...'
-              : calendarLastRefreshed
-                ? formatLastRefreshed(calendarLastRefreshed)
-                : 'No calendar'
-            }
+            <span className="hidden sm:inline">
+              {isLoadingCalendar
+                ? 'Syncing...'
+                : calendarLastRefreshed
+                  ? formatLastRefreshed(calendarLastRefreshed)
+                  : 'No calendar'
+              }
+            </span>
+            <span className="sm:hidden">
+              {isLoadingCalendar ? '...' : calendarLastRefreshed ? '✓' : '—'}
+            </span>
           </Badge>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowMeetings(true)}
-            className="h-8 w-8"
-            style={{ color: 'var(--df-text-muted)' }}
-          >
-            <Users size={16} />
-          </Button>
+          {/* Action Buttons - compact row */}
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowMeetings(true)}
+              className="h-7 w-7"
+              style={{ color: 'var(--df-text-muted)' }}
+              title="Meetings"
+            >
+              <Users size={14} />
+            </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowErrandsSheet(true)}
-            className="h-8 w-8"
-            style={{ color: showErrandsSheet ? 'var(--df-primary)' : 'var(--df-text-muted)' }}
-            title="Errands Planner"
-          >
-            <Car size={16} />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowErrandsSheet(true)}
+              className="h-7 w-7"
+              style={{ color: showErrandsSheet ? 'var(--df-primary)' : 'var(--df-text-muted)' }}
+              title="Errands Planner"
+            >
+              <Car size={14} />
+            </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={createTestConflict}
-            className="h-8 w-8"
-            style={{ color: 'var(--df-warning)' }}
-            title="Test Conflict Detection"
-          >
-            <AlertTriangle size={14} />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={loadCalendarEvents}
+              disabled={isLoadingCalendar}
+              className="h-7 w-7"
+              style={{ color: 'var(--df-text-muted)' }}
+              title="Refresh Calendar"
+            >
+              <RefreshCw size={14} className={isLoadingCalendar ? 'animate-spin' : ''} />
+            </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={addTestEvent}
-            className="h-8 w-8"
-            style={{ color: 'var(--df-primary)' }}
-            title="Add Test Calendar Event"
-          >
-            <Calendar size={16} />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={addTestEvent}
+              className="h-7 w-7"
+              style={{ color: 'var(--df-primary)' }}
+              title="Add Test Event"
+            >
+              <Calendar size={14} />
+            </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={loadCalendarEvents}
-            disabled={isLoadingCalendar}
-            className="h-8 w-8"
-            style={{ color: 'var(--df-text-muted)' }}
-          >
-            <MoreHorizontal size={16} />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={createTestConflict}
+              className="h-7 w-7"
+              style={{ color: 'var(--df-warning)' }}
+              title="Test Conflict"
+            >
+              <AlertTriangle size={12} />
+            </Button>
+          </div>
         </div>
       </div>
 
