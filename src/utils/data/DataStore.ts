@@ -28,6 +28,7 @@ export interface Task {
   energy: 'deep' | 'shallow';
   deadline?: string;
   tags: string[];
+  category?: 'deep_work' | 'admin' | 'meeting' | 'errand' | 'task';
   priority?: 'high' | 'medium' | 'low';
   context?: string;
   location?: string;
@@ -629,7 +630,7 @@ export class DataStore {
         try {
           const parsedOps = JSON.parse(saved);
           // Ensure ops are clean objects without circular references
-          this.pendingOps = parsedOps.map((op: any) => ({
+          let ops = parsedOps.map((op: any) => ({
             id: op.id || '',
             op: op.op || 'upsert',
             table: op.table || '',
@@ -638,6 +639,34 @@ export class DataStore {
             created_at: op.created_at || new Date().toISOString(),
             retries: op.retries || 0
           }));
+
+          // Filter out broken task upsert operations that are missing required fields
+          // These will never succeed and should be dropped
+          const initialCount = ops.length;
+          ops = ops.filter((op: any) => {
+            if (op.table === 'tasks' && op.op === 'upsert') {
+              // Task upserts need either title (for creates) or should be dropped if 
+              // they're partial updates that somehow got queued
+              if (!op.payload.title && !op.payload.steps) {
+                console.warn('Dropping broken task operation missing required fields:', op.id);
+                return false;
+              }
+              // If it has steps but no title, it's a broken update - drop it
+              if (op.payload.steps && !op.payload.title) {
+                console.warn('Dropping broken task update operation (steps without title):', op.id);
+                return false;
+              }
+            }
+            return true;
+          });
+
+          if (ops.length !== initialCount) {
+            console.log(`Cleaned ${initialCount - ops.length} broken pending operations`);
+            // Save the cleaned ops back
+            localStorage.setItem('df-pending-ops', JSON.stringify(ops));
+          }
+
+          this.pendingOps = ops;
         } catch (error) {
           console.error('Failed to load pending ops:', error instanceof Error ? error.message : 'Unknown error');
           this.pendingOps = [];
@@ -880,6 +909,7 @@ export class DataStore {
         est_most: taskData.est_most || 45,
         est_max: taskData.est_max || 60,
         energy: taskData.energy || 'shallow',
+        category: taskData.category || 'deep_work',
         deadline: taskData.deadline,
         tags: taskData.tags || [],
         context: taskData.context || '',
@@ -1298,6 +1328,9 @@ export class DataStore {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Fetched tasks:', data?.length, 'Sample category:', data?.[0]?.category);
+        }
         return data || [];
       };
 
@@ -1319,8 +1352,9 @@ export class DataStore {
     const user = await authManager.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const newTask = {
+    const newTask: Task = {
       ...task,
+      category: task.category || 'task',
       id: generateId(),
       user_id: user.id,
       created_at: new Date().toISOString(),
@@ -1331,13 +1365,39 @@ export class DataStore {
   }
 
   async updateTask(id: string, updates: Partial<Task>): Promise<string> {
+    const user = await authManager.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
     const updatedTask = {
       ...updates,
-      id,
       updated_at: new Date().toISOString()
     };
 
-    return this.queueOperation('upsert', 'tasks', updatedTask);
+    // Use direct Supabase update operation to avoid not-null constraint issues
+    const operation = async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .update(updatedTask)
+        .eq('id', id)
+        .eq('user_id', user.id) // Ensure user can only update their own tasks
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Direct Supabase update failed for task:', error);
+        throw error;
+      }
+      return data;
+    };
+
+    const data = await withTimeout(operation(), {
+      timeoutMs: 30000,
+      timeoutMessage: 'Update task operation timed out'
+    });
+
+    this.lastServerAckTs = Date.now();
+    this.updateSyncStatus();
+    return data.id;
   }
 
   async deleteTask(id: string): Promise<string> {

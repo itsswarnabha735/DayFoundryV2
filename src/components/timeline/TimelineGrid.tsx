@@ -8,6 +8,7 @@ interface TimelineGridProps {
   blocks: ScheduleBlock[];
   onBlockResize: (blockId: string, newStartTime: string, newEndTime: string) => void;
   onTogglePin: (blockId: string) => void;
+  onBlockClick: (block: ScheduleBlock) => void;
   startHour?: number;
   endHour?: number;
   conflicts?: ConflictDetection[];
@@ -17,6 +18,7 @@ export function TimelineGrid({
   blocks,
   onBlockResize,
   onTogglePin,
+  onBlockClick,
   startHour = 6,
   endHour = 22,
   conflicts = []
@@ -181,90 +183,90 @@ export function TimelineGrid({
   const totalHeight = (endHour - startHour) * HOUR_HEIGHT;
 
   return (
-    <div className="flex-1 overflow-auto">
+    <div
+      ref={timelineRef}
+      className="relative min-h-full"
+      style={{
+        height: `${totalHeight}px`,
+        paddingLeft: '80px', // Space for time labels
+        paddingRight: 'var(--df-space-16)'
+      }}
+    >
+      {/* Time Labels and Grid Lines */}
+      {timeSlots.map((slot) => (
+        <div
+          key={slot.time}
+          className="absolute left-0 right-0 flex items-center"
+          style={{ top: `${slot.position}px` }}
+        >
+          {/* Time Label */}
+          <div
+            className="w-20 pr-3 text-right"
+            style={{
+              fontSize: slot.isHourStart ? 'var(--df-type-caption-size)' : '11px',
+              fontWeight: slot.isHourStart ? 'var(--df-type-caption-weight)' : '400',
+              color: slot.isHourStart ? 'var(--df-text-muted)' : 'transparent'
+            }}
+          >
+            {slot.isHourStart ? slot.displayTime : ''}
+          </div>
+
+          {/* Grid Line */}
+          <div
+            className="flex-1 border-t"
+            style={{
+              borderTopColor: slot.isHourStart ? 'rgba(0,0,0,0.06)' : 'transparent',
+              borderTopWidth: '1px',
+              borderTopStyle: slot.isHourStart ? 'dashed' : 'solid'
+            }}
+          ></div>
+        </div>
+      ))}
+
+      {/* Timeline Blocks Container */}
       <div
-        ref={timelineRef}
-        className="relative min-h-full"
+        className="absolute top-0 bottom-0"
         style={{
-          height: `${totalHeight}px`,
-          paddingLeft: '80px', // Space for time labels
-          paddingRight: 'var(--df-space-16)'
+          left: '80px',
+          right: 'var(--df-space-16)',
+          pointerEvents: 'none'
         }}
       >
-        {/* Time Labels and Grid Lines */}
-        {timeSlots.map((slot) => (
-          <div
-            key={slot.time}
-            className="absolute left-0 right-0 flex items-center"
-            style={{ top: `${slot.position}px` }}
-          >
-            {/* Time Label */}
-            <div
-              className="w-20 pr-3 text-right"
-              style={{
-                fontSize: slot.isHourStart ? 'var(--df-type-caption-size)' : '11px',
-                fontWeight: slot.isHourStart ? 'var(--df-type-caption-weight)' : '400',
-                color: slot.isHourStart ? 'var(--df-text-muted)' : 'transparent'
-              }}
-            >
-              {slot.isHourStart ? slot.displayTime : ''}
-            </div>
+        {blocks.map((block) => {
+          const top = timeToPosition(block.startTime);
+          const height = getBlockHeight(block.startTime, block.endTime);
+          const layoutPos = layout.get(block.id) || { left: '0%', width: '100%' };
 
-            {/* Grid Line */}
-            <div
-              className="flex-1 border-t"
+          const blockConflict = conflicts.find(c => c.affectedBlocks?.some(b => b?.id === block.id));
+
+          return (
+            <TimelineBlock
+              key={block.id}
+              block={block}
+              conflict={blockConflict}
               style={{
-                borderTopColor: slot.isHourStart ? 'var(--df-border)' : 'rgba(0,0,0,0.05)',
-                borderTopWidth: slot.isHourStart ? '1px' : '0.5px'
+                position: 'absolute',
+                left: layoutPos.left,
+                width: layoutPos.width,
+                top: `${top}px`,
+                height: `${height}px`,
+                zIndex: dragState?.blockId === block.id ? 10 : 1,
+                pointerEvents: 'auto'
               }}
+              onMouseDownResize={handleMouseDown}
+              onTogglePin={onTogglePin}
+              onClick={() => onBlockClick(block)}
+              isResizing={dragState?.blockId === block.id}
             />
-          </div>
-        ))}
-
-        {/* Timeline Blocks Container */}
-        <div
-          className="absolute top-0 bottom-0"
-          style={{
-            left: '80px',
-            right: 'var(--df-space-16)',
-            pointerEvents: 'none'
-          }}
-        >
-          {blocks.map((block) => {
-            const top = timeToPosition(block.startTime);
-            const height = getBlockHeight(block.startTime, block.endTime);
-            const layoutPos = layout.get(block.id) || { left: '0%', width: '100%' };
-
-            const blockConflict = conflicts.find(c => c.affectedBlocks?.some(b => b?.id === block.id));
-
-            return (
-              <TimelineBlock
-                key={block.id}
-                block={block}
-                conflict={blockConflict}
-                style={{
-                  position: 'absolute',
-                  left: layoutPos.left,
-                  width: layoutPos.width,
-                  top: `${top}px`,
-                  height: `${height}px`,
-                  zIndex: dragState?.blockId === block.id ? 10 : 1,
-                  pointerEvents: 'auto'
-                }}
-                onMouseDownResize={handleMouseDown}
-                onTogglePin={onTogglePin}
-                isResizing={dragState?.blockId === block.id}
-              />
-            );
-          })}
-        </div>
-
-        {/* Current Time Indicator */}
-        <CurrentTimeIndicator
-          startHour={startHour}
-          timeToPosition={timeToPosition}
-        />
+          );
+        })}
       </div>
+
+      {/* Current Time Indicator */}
+      <CurrentTimeIndicator
+        startHour={startHour}
+        timeToPosition={timeToPosition}
+      />
     </div>
   );
 }

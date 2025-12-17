@@ -1,0 +1,834 @@
+{
+    "metadata": {
+        "description": "30+ Test Cases for Guardian Agent (Conflict Detection & Severity)",
+        "version": "1.0.0",
+        "created": "2025-12-16",
+        "agent": "guardian-check",
+        "evaluation_criteria": [
+            "Conflict Detection Accuracy",
+            "Severity Scoring (0-10)",
+            "Alert Type Classification",
+            "Context Awareness"
+        ]
+    },
+    "testCases": [
+        {
+            "id": "G001",
+            "name": "No Conflict - Empty Day",
+            "description": "New event added to a completely empty scheduled day.",
+            "input": {
+                "event": {
+                    "title": "New Meeting",
+                    "start": "10:00",
+                    "end": "11:00"
+                },
+                "blocks": [],
+                "user_preferences": {
+                    "working_hours": "09:00-17:00"
+                }
+            },
+            "expected": {
+                "status": "ok",
+                "conflicts": 0
+            }
+        },
+        {
+            "id": "G002",
+            "name": "No Conflict - Perfect Gap",
+            "description": "New event fits perfectly between two existing blocks.",
+            "input": {
+                "event": {
+                    "title": "Quick Sync",
+                    "start": "11:00",
+                    "end": "11:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Deep Work",
+                        "start": "09:00",
+                        "end": "11:00"
+                    },
+                    {
+                        "title": "Lunch",
+                        "start": "11:30",
+                        "end": "12:30"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "status": "ok",
+                "conflicts": 0
+            }
+        },
+        {
+            "id": "G003",
+            "name": "No Conflict - Early Morning",
+            "description": "Event before working hours (if permitted) implies no block conflicts.",
+            "input": {
+                "event": {
+                    "title": "Gym",
+                    "start": "06:00",
+                    "end": "07:00"
+                },
+                "blocks": [
+                    {
+                        "title": "Start Day",
+                        "start": "09:00",
+                        "end": "09:30"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "status": "ok",
+                "conflicts": 0
+            }
+        },
+        {
+            "id": "G004",
+            "name": "No Conflict - Late Evening",
+            "description": "Event added after all scheduled blocks.",
+            "input": {
+                "event": {
+                    "title": "Dinner",
+                    "start": "19:00",
+                    "end": "20:00"
+                },
+                "blocks": [
+                    {
+                        "title": "Wrap Up",
+                        "start": "16:30",
+                        "end": "17:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "status": "ok",
+                "conflicts": 0
+            }
+        },
+        {
+            "id": "G005",
+            "name": "No Conflict - Touching Boundaries",
+            "description": "Event ends exactly when block starts, starts exactly when block ends.",
+            "input": {
+                "event": {
+                    "title": "Meeting",
+                    "start": "10:00",
+                    "end": "11:00"
+                },
+                "blocks": [
+                    {
+                        "title": "Block A",
+                        "start": "09:00",
+                        "end": "10:00"
+                    },
+                    {
+                        "title": "Block B",
+                        "start": "11:00",
+                        "end": "12:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "status": "ok",
+                "conflicts": 0
+            }
+        },
+        {
+            "id": "G006",
+            "name": "Conflict - Single Block Overlap",
+            "description": "Direct overlap with one generic block.",
+            "input": {
+                "event": {
+                    "title": "Emergency Call",
+                    "start": "10:00",
+                    "end": "10:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Project Work",
+                        "type": "admin",
+                        "start": "09:00",
+                        "end": "11:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "conflict",
+                "severity_range": [
+                    4,
+                    6
+                ]
+            }
+        },
+        {
+            "id": "G007",
+            "name": "Conflict - Deep Work (High Severity)",
+            "description": "Overlap with a Deep Work block should trigger high severity.",
+            "input": {
+                "event": {
+                    "title": "Sales Call",
+                    "start": "10:00",
+                    "end": "10:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Coding Session",
+                        "type": "deep",
+                        "start": "09:00",
+                        "end": "12:00"
+                    }
+                ],
+                "user_preferences": {
+                    "conflict_resolution_style": "protect_focus"
+                }
+            },
+            "expected": {
+                "type": "warning",
+                "severity_range": [
+                    8,
+                    9
+                ]
+            }
+        },
+        {
+            "id": "G008",
+            "name": "Conflict - Break (Low Severity)",
+            "description": "Overlap with a break is annoying but not critical.",
+            "input": {
+                "event": {
+                    "title": "Quick Chat",
+                    "start": "10:30",
+                    "end": "10:45"
+                },
+                "blocks": [
+                    {
+                        "title": "Morning Break",
+                        "type": "break",
+                        "start": "10:30",
+                        "end": "10:45"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "conflict",
+                "severity_range": [
+                    1,
+                    3
+                ]
+            }
+        },
+        {
+            "id": "G009",
+            "name": "Conflict - Multi-Block Wipeout",
+            "description": "Long event wipes out 3 different small tasks.",
+            "input": {
+                "event": {
+                    "title": "Workshop",
+                    "start": "13:00",
+                    "end": "16:00"
+                },
+                "blocks": [
+                    {
+                        "title": "Email",
+                        "type": "admin",
+                        "start": "13:00",
+                        "end": "13:30"
+                    },
+                    {
+                        "title": "Sync",
+                        "type": "meeting",
+                        "start": "14:00",
+                        "end": "14:30"
+                    },
+                    {
+                        "title": "Review",
+                        "type": "deep",
+                        "start": "15:00",
+                        "end": "16:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "warning",
+                "severity_range": [
+                    7,
+                    9
+                ],
+                "message_keywords": [
+                    "multiple",
+                    "deep"
+                ]
+            }
+        },
+        {
+            "id": "G010",
+            "name": "Conflict - Partial Overlap Start",
+            "description": "Event eats into the start of a block.",
+            "input": {
+                "event": {
+                    "title": "Late Start",
+                    "start": "09:00",
+                    "end": "09:15"
+                },
+                "blocks": [
+                    {
+                        "title": "Deep Work",
+                        "type": "deep",
+                        "start": "09:00",
+                        "end": "11:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "warning",
+                "severity_range": [
+                    6,
+                    8
+                ]
+            }
+        },
+        {
+            "id": "G011",
+            "name": "Conflict - Partial Overlap End",
+            "description": "Event eats into the end of a block.",
+            "input": {
+                "event": {
+                    "title": "Early Lunch",
+                    "start": "11:45",
+                    "end": "12:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Deep Work",
+                        "type": "deep",
+                        "start": "09:00",
+                        "end": "12:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "warning",
+                "severity_range": [
+                    6,
+                    8
+                ]
+            }
+        },
+        {
+            "id": "G012",
+            "name": "Conflict - Nested Event",
+            "description": "Event is completely inside a larger block.",
+            "input": {
+                "event": {
+                    "title": "Interruption",
+                    "start": "10:00",
+                    "end": "10:15"
+                },
+                "blocks": [
+                    {
+                        "title": "Deep Work",
+                        "type": "deep",
+                        "start": "09:00",
+                        "end": "12:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "warning",
+                "severity_range": [
+                    7,
+                    9
+                ],
+                "reason": "fragmentation"
+            }
+        },
+        {
+            "id": "G013",
+            "name": "Conflict - Swallow Block",
+            "description": "Event completely swallows a smaller block.",
+            "input": {
+                "event": {
+                    "title": "Long Meeting",
+                    "start": "09:00",
+                    "end": "11:00"
+                },
+                "blocks": [
+                    {
+                        "title": "Quick Task",
+                        "type": "admin",
+                        "start": "09:30",
+                        "end": "10:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "conflict",
+                "severity_range": [
+                    5,
+                    7
+                ]
+            }
+        },
+        {
+            "id": "G014",
+            "name": "Critical - Immutable Meeting Clash",
+            "description": "New event clashes with an existing calendar event (simulated as block type 'meeting').",
+            "input": {
+                "event": {
+                    "title": "Board Meeting",
+                    "start": "10:00",
+                    "end": "11:00"
+                },
+                "blocks": [
+                    {
+                        "title": "Client Call",
+                        "type": "meeting",
+                        "start": "10:30",
+                        "end": "11:30"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "critical",
+                "severity_range": [
+                    9,
+                    10
+                ]
+            }
+        },
+        {
+            "id": "G015",
+            "name": "Low Severity - Buffer Clash",
+            "description": "Clash with 'Buffer' or 'Commute' type block.",
+            "input": {
+                "event": {
+                    "title": "Call",
+                    "start": "08:50",
+                    "end": "09:05"
+                },
+                "blocks": [
+                    {
+                        "title": "Morning Buffer",
+                        "type": "buffer",
+                        "start": "08:45",
+                        "end": "09:15"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "conflict",
+                "severity_range": [
+                    1,
+                    3
+                ]
+            }
+        },
+        {
+            "id": "G016",
+            "name": "Preference - Protect Deep Work",
+            "description": "User sets 'protect_focus', escalating deep work conflict severity.",
+            "input": {
+                "event": {
+                    "title": "Chat",
+                    "start": "10:00",
+                    "end": "10:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Focus Time",
+                        "type": "deep",
+                        "start": "09:00",
+                        "end": "12:00"
+                    }
+                ],
+                "user_preferences": {
+                    "conflict_resolution_style": "protect_focus"
+                }
+            },
+            "expected": {
+                "severity_range": [
+                    9,
+                    10
+                ],
+                "type": "critical"
+            }
+        },
+        {
+            "id": "G017",
+            "name": "Preference - Hit Deadlines (Flexible)",
+            "description": "User sets 'hit_deadlines', lowering deep work conflict severity slightly.",
+            "input": {
+                "event": {
+                    "title": "Chat",
+                    "start": "10:00",
+                    "end": "10:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Focus Time",
+                        "type": "deep",
+                        "start": "09:00",
+                        "end": "12:00"
+                    }
+                ],
+                "user_preferences": {
+                    "conflict_resolution_style": "hit_deadlines"
+                }
+            },
+            "expected": {
+                "severity_range": [
+                    6,
+                    8
+                ]
+            }
+        },
+        {
+            "id": "G018",
+            "name": "Edge Case - 1 Minute Overlap",
+            "description": "Technical overlap of 1 minute should still be detected.",
+            "input": {
+                "event": {
+                    "title": "Quick",
+                    "start": "09:59",
+                    "end": "10:05"
+                },
+                "blocks": [
+                    {
+                        "title": "Block",
+                        "start": "09:00",
+                        "end": "10:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "status": "conflict"
+            }
+        },
+        {
+            "id": "G019",
+            "name": "Edge Case - All Day Event",
+            "description": "All day event implicitly conflicts with everything.",
+            "input": {
+                "event": {
+                    "title": "Holiday",
+                    "start": "00:00",
+                    "end": "23:59",
+                    "allDay": true
+                },
+                "blocks": [
+                    {
+                        "title": "Work",
+                        "start": "09:00",
+                        "end": "17:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "critical",
+                "severity": 10
+            }
+        },
+        {
+            "id": "G020",
+            "name": "Context - Lunch Protection",
+            "description": "Conflict with a block titled 'Lunch'.",
+            "input": {
+                "event": {
+                    "title": "Meeting",
+                    "start": "12:30",
+                    "end": "13:00"
+                },
+                "blocks": [
+                    {
+                        "title": "Lunch Break",
+                        "type": "break",
+                        "start": "12:00",
+                        "end": "13:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "warning",
+                "message_keywords": [
+                    "lunch",
+                    "break"
+                ]
+            }
+        },
+        {
+            "id": "G021",
+            "name": "Context - Errand Clash",
+            "description": "Conflict with an Errand (requires physical travel).",
+            "input": {
+                "event": {
+                    "title": "Call",
+                    "start": "15:00",
+                    "end": "15:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Grocery Run",
+                        "type": "errand",
+                        "start": "14:30",
+                        "end": "16:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "severity_range": [
+                    5,
+                    7
+                ],
+                "reason": "Physical location constraint"
+            }
+        },
+        {
+            "id": "G022",
+            "name": "Severe - Double Booking",
+            "description": "User manually creating conflict with 2 other events.",
+            "input": {
+                "event": {
+                    "title": "Triple Booked",
+                    "start": "10:00",
+                    "end": "10:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Block A",
+                        "start": "10:00",
+                        "end": "10:30"
+                    },
+                    {
+                        "title": "Block B",
+                        "start": "10:00",
+                        "end": "11:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "severity": 10,
+                "message": "Double booking detected"
+            }
+        },
+        {
+            "id": "G023",
+            "name": "Auto-Resolution Flag",
+            "description": "Check if agent acknowledges auto-resolution preference.",
+            "input": {
+                "event": {
+                    "title": "Fix Me",
+                    "start": "10:00",
+                    "end": "10:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Admin",
+                        "start": "10:00",
+                        "end": "10:30"
+                    }
+                ],
+                "user_preferences": {
+                    "auto_resolve_conflicts": true
+                }
+            },
+            "expected": {
+                "recommended_action": "auto_resolve"
+            }
+        },
+        {
+            "id": "G024",
+            "name": "False Alarm - Adjacent",
+            "description": "Ensure touching blocks are NOT conflicts.",
+            "input": {
+                "event": {
+                    "title": "B",
+                    "start": "10:00",
+                    "end": "11:00"
+                },
+                "blocks": [
+                    {
+                        "title": "A",
+                        "start": "09:00",
+                        "end": "10:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "conflicts": 0
+            }
+        },
+        {
+            "id": "G025",
+            "name": "Model - Pro Reasoning",
+            "description": "Test with Pro model preference (complex reasoning expected).",
+            "input": {
+                "event": {
+                    "title": "Complex Merger",
+                    "start": "10:00",
+                    "end": "12:00"
+                },
+                "blocks": [
+                    {
+                        "title": "Deep Work",
+                        "start": "09:00",
+                        "end": "12:00"
+                    }
+                ],
+                "user_preferences": {
+                    "ai_preferences": {
+                        "model": "pro"
+                    }
+                }
+            },
+            "expected": {
+                "model_used": "gemini-3.0-pro"
+            }
+        },
+        {
+            "id": "G026",
+            "name": "Model - Standard Speed",
+            "description": "Test with Standard model preference.",
+            "input": {
+                "event": {
+                    "title": "Chat",
+                    "start": "10:00",
+                    "end": "10:15"
+                },
+                "blocks": [
+                    {
+                        "title": "Admin",
+                        "start": "10:00",
+                        "end": "10:30"
+                    }
+                ],
+                "user_preferences": {
+                    "ai_preferences": {
+                        "model": "standard"
+                    }
+                }
+            },
+            "expected": {
+                "model_used": "gemini-2.0-flash"
+            }
+        },
+        {
+            "id": "G027",
+            "name": "Timezone Mismatch",
+            "description": "Event in UTC vs Block in IST (should be resolved to absolute time).",
+            "input": {
+                "event": {
+                    "title": "UTC Event",
+                    "start": "2025-12-16T10:00:00Z",
+                    "end": "2025-12-16T11:00:00Z"
+                },
+                "blocks": [
+                    {
+                        "title": "IST Block",
+                        "start": "2025-12-16T15:30:00+05:30",
+                        "end": "2025-12-16T16:30:00+05:30"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "conflicts": 1,
+                "note": "10am UTC is 3:30pm IST, so they overlap"
+            }
+        },
+        {
+            "id": "G028",
+            "name": "Tone Check - Rude Event",
+            "description": "Event titled 'Waste of time' shouldn't bias the agent's professional tone.",
+            "input": {
+                "event": {
+                    "title": "Waste of time meeting",
+                    "start": "10:00",
+                    "end": "10:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Work",
+                        "start": "10:00",
+                        "end": "10:30"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "conflict",
+                "tone": "professional"
+            }
+        },
+        {
+            "id": "G029",
+            "name": "Long Duration Conflict",
+            "description": "4 hour event overlaps everything.",
+            "input": {
+                "event": {
+                    "title": "Offsite",
+                    "start": "09:00",
+                    "end": "13:00"
+                },
+                "blocks": [
+                    {
+                        "title": "Morning Routine",
+                        "start": "09:00",
+                        "end": "09:30"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "severity": 10,
+                "message": "Major schedule disruption"
+            }
+        },
+        {
+            "id": "G030",
+            "name": "Tiny Block Survival",
+            "description": "5 minute task overlap check.",
+            "input": {
+                "event": {
+                    "title": "Call",
+                    "start": "10:00",
+                    "end": "10:30"
+                },
+                "blocks": [
+                    {
+                        "title": "Micro-task",
+                        "start": "10:15",
+                        "end": "10:20"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "type": "conflict",
+                "severity_range": [
+                    2,
+                    4
+                ]
+            }
+        }
+    ]
+}

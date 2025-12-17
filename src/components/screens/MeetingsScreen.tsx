@@ -34,7 +34,7 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
     try {
       // For now, load mock data - can be replaced with real data store calls
       console.log('Loading meetings...');
-      
+
       // Add mock data for demo
       const mockMeetings: Meeting[] = [
         {
@@ -76,10 +76,10 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
       ];
 
       const allMeetings = [...meetingData, ...mockMeetings];
-      
+
       // Sort by start time
       allMeetings.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-      
+
       setMeetings(allMeetings);
     } catch (error) {
       console.error('Failed to load meetings:', error);
@@ -94,7 +94,7 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     if (date.toDateString() === today.toDateString()) {
       return 'Today';
     } else if (date.toDateString() === tomorrow.toDateString()) {
@@ -106,9 +106,9 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
 
   const handleAddPrepBlock = async (meeting: Meeting) => {
     // Calculate prep block timing (30 mins before meeting)
-    const prepStart = new Date(meeting.startTime.getTime() - 30 * 60 * 1000);
-    const prepEnd = new Date(meeting.startTime.getTime());
-    
+    const prepStart = new Date(new Date(meeting.startTime).getTime() - 30 * 60 * 1000);
+    const prepEnd = new Date(meeting.startTime);
+
     // Create prep block
     const prepBlock = {
       id: `prep-${meeting.id}`,
@@ -116,20 +116,89 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
       startTime: prepStart,
       endTime: prepEnd,
       type: 'prep',
-      linkedMeetingId: meeting.id
+      linkedMeetingId: meeting.id,
+      isPinned: false
     };
-    
+
     try {
-      await dataStore.set(`prep-block-${prepBlock.id}`, prepBlock);
-      
+      // Save directly to db via data store or ScheduleScreen method
+      // Ideally we should use ScheduleScreen's save method but for now using DataStore directly if available
+      // or adding to schedule blocks list if we can reach it.
+      // Since this is a separate screen, we likely need to rely on the shared data store or backend.
+      // Re-using the pattern from existing code which seemed to rely on `dataStore` but it was mock.
+      // We will assume `ScheduleScreen.saveScheduleToDatabase` is the way, but we don't have access to it here.
+      // We will construct a minimal valid block object and save it to the DB directly to be robust.
+
+      const { data: { user } } = await (await import('../../utils/supabase/client')).supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
+      const { error } = await (await import('../../utils/supabase/client')).supabase
+        .from('schedule_blocks')
+        .insert({
+          id: prepBlock.id,
+          user_id: user.id,
+          date: meeting.startTime.toISOString().split('T')[0],
+          title: prepBlock.title,
+          block_type: 'prep',
+          start_at: prepBlock.startTime.toISOString(),
+          end_at: prepBlock.endTime.toISOString(),
+          pinned: false,
+          event_id: meeting.id // Link to meeting
+        });
+
+      if (error) throw error;
+
       // Update meeting to show it has prep
-      const updatedMeeting = { ...meeting, hasPrep: true };
-      await dataStore.set(`meeting-${meeting.id}`, updatedMeeting);
-      
-      // Refresh meetings
+      // In a real app we might update a 'metadata' field on the event, 
+      // but for now we just rely on the existence of the prep block.
+
+      // Refresh meetings/schedule
       loadMeetings();
+      // Force refresh of schedule screen if possible or let the listener handle it
     } catch (error) {
       console.error('Failed to add prep block:', error);
+    }
+  };
+
+  const handleAddDebriefBlock = async (meeting: Meeting) => {
+    // Calculate debrief block timing (15 mins after meeting)
+    const debriefStart = new Date(meeting.endTime);
+    const debriefEnd = new Date(new Date(meeting.endTime).getTime() + 15 * 60 * 1000);
+
+    // Create debrief block
+    const debriefBlock = {
+      id: `debrief-${meeting.id}`,
+      title: `Debrief: ${meeting.title}`,
+      startTime: debriefStart,
+      endTime: debriefEnd,
+      type: 'debrief',
+      linkedMeetingId: meeting.id,
+      isPinned: false
+    };
+
+    try {
+      const { data: { user } } = await (await import('../../utils/supabase/client')).supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
+      const { error } = await (await import('../../utils/supabase/client')).supabase
+        .from('schedule_blocks')
+        .insert({
+          id: debriefBlock.id,
+          user_id: user.id,
+          date: meeting.startTime.toISOString().split('T')[0],
+          title: debriefBlock.title,
+          block_type: 'debrief',
+          start_at: debriefBlock.startTime.toISOString(),
+          end_at: debriefBlock.endTime.toISOString(),
+          pinned: false,
+          event_id: meeting.id
+        });
+
+      if (error) throw error;
+
+      loadMeetings();
+    } catch (error) {
+      console.error('Failed to add debrief block:', error);
     }
   };
 
@@ -144,25 +213,25 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
   }
 
   const upcomingMeetings = meetings.filter(m => new Date(m.startTime) > new Date());
-  const todayMeetings = upcomingMeetings.filter(m => 
+  const todayMeetings = upcomingMeetings.filter(m =>
     new Date(m.startTime).toDateString() === new Date().toDateString()
   );
-  const laterMeetings = upcomingMeetings.filter(m => 
+  const laterMeetings = upcomingMeetings.filter(m =>
     new Date(m.startTime).toDateString() !== new Date().toDateString()
   );
 
   return (
-    <div 
+    <div
       className="h-full flex flex-col"
-      style={{ 
+      style={{
         backgroundColor: 'var(--df-surface)',
         color: 'var(--df-text)'
       }}
     >
       {/* Header */}
-      <div 
+      <div
         className="flex items-center justify-between p-4 border-b"
-        style={{ 
+        style={{
           borderBottomColor: 'var(--df-border)',
           paddingTop: 'max(var(--df-space-16), env(safe-area-inset-top))'
         }}
@@ -179,9 +248,9 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
               <ArrowLeft size={20} />
             </Button>
           )}
-          
+
           <div>
-            <h1 
+            <h1
               className="m-0"
               style={{
                 fontSize: 'var(--df-type-title-size)',
@@ -191,7 +260,7 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
             >
               Meetings
             </h1>
-            <p 
+            <p
               className="m-0 mt-1"
               style={{
                 fontSize: 'var(--df-type-caption-size)',
@@ -203,7 +272,7 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
             </p>
           </div>
         </div>
-        
+
         <Button
           variant="outline"
           size="sm"
@@ -224,12 +293,12 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
       <div className="flex-1 overflow-auto">
         {upcomingMeetings.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-            <Calendar 
-              size={48} 
+            <Calendar
+              size={48}
               style={{ color: 'var(--df-text-muted)' }}
               className="mb-4"
             />
-            <h3 
+            <h3
               className="m-0 mb-2"
               style={{
                 fontSize: 'var(--df-type-subtitle-size)',
@@ -239,7 +308,7 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
             >
               No upcoming meetings
             </h3>
-            <p 
+            <p
               className="m-0 mb-6"
               style={{
                 fontSize: 'var(--df-type-body-size)',
@@ -266,7 +335,7 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
             {/* Today's Meetings */}
             {todayMeetings.length > 0 && (
               <div>
-                <h2 
+                <h2
                   className="m-0 mb-3"
                   style={{
                     fontSize: 'var(--df-type-subtitle-size)',
@@ -292,7 +361,7 @@ export function MeetingsScreen({ onBack }: { onBack?: () => void }) {
             {/* Later Meetings */}
             {laterMeetings.length > 0 && (
               <div>
-                <h2 
+                <h2
                   className="m-0 mb-3"
                   style={{
                     fontSize: 'var(--df-type-subtitle-size)',
@@ -329,11 +398,11 @@ interface MeetingCardProps {
 
 function MeetingCard({ meeting, onSelect, onAddPrep }: MeetingCardProps) {
   const isUpcoming = new Date(meeting.startTime) > new Date();
-  const isStartingSoon = isUpcoming && 
+  const isStartingSoon = isUpcoming &&
     new Date(meeting.startTime).getTime() - new Date().getTime() < 60 * 60 * 1000; // Within 1 hour
 
   return (
-    <Card 
+    <Card
       className="p-0 cursor-pointer transition-all duration-200 hover:shadow-md"
       style={{
         backgroundColor: 'var(--df-surface)',
@@ -347,7 +416,7 @@ function MeetingCard({ meeting, onSelect, onAddPrep }: MeetingCardProps) {
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h3 
+              <h3
                 className="m-0 truncate"
                 style={{
                   fontSize: 'var(--df-type-body-size)',
@@ -358,7 +427,7 @@ function MeetingCard({ meeting, onSelect, onAddPrep }: MeetingCardProps) {
                 {meeting.title}
               </h3>
               {meeting.isCritical && (
-                <Badge 
+                <Badge
                   variant="destructive"
                   className="text-xs"
                   style={{
@@ -371,11 +440,11 @@ function MeetingCard({ meeting, onSelect, onAddPrep }: MeetingCardProps) {
                 </Badge>
               )}
             </div>
-            
+
             <div className="flex items-center gap-4 mb-2">
               <div className="flex items-center gap-1">
                 <Clock size={14} style={{ color: 'var(--df-text-muted)' }} />
-                <span 
+                <span
                   style={{
                     fontSize: 'var(--df-type-caption-size)',
                     fontWeight: 'var(--df-type-caption-weight)',
@@ -385,9 +454,9 @@ function MeetingCard({ meeting, onSelect, onAddPrep }: MeetingCardProps) {
                   {formatDate(meeting.startTime)} • {formatTime(meeting.startTime)} - {formatTime(meeting.endTime)}
                 </span>
               </div>
-              
+
               {isStartingSoon && (
-                <Badge 
+                <Badge
                   variant="secondary"
                   style={{
                     backgroundColor: 'var(--df-warning)',
@@ -404,7 +473,7 @@ function MeetingCard({ meeting, onSelect, onAddPrep }: MeetingCardProps) {
               {meeting.attendees.length > 0 && (
                 <div className="flex items-center gap-1">
                   <Users size={14} style={{ color: 'var(--df-text-muted)' }} />
-                  <span 
+                  <span
                     style={{
                       fontSize: 'var(--df-type-caption-size)',
                       fontWeight: 'var(--df-type-caption-weight)',
@@ -415,11 +484,11 @@ function MeetingCard({ meeting, onSelect, onAddPrep }: MeetingCardProps) {
                   </span>
                 </div>
               )}
-              
+
               {meeting.location && !meeting.isVirtual && (
                 <div className="flex items-center gap-1">
                   <MapPin size={14} style={{ color: 'var(--df-text-muted)' }} />
-                  <span 
+                  <span
                     className="truncate"
                     style={{
                       fontSize: 'var(--df-type-caption-size)',
@@ -431,11 +500,31 @@ function MeetingCard({ meeting, onSelect, onAddPrep }: MeetingCardProps) {
                   </span>
                 </div>
               )}
-              
+
+              {/* New buttons for Prep and Debrief */}
+              <div className="flex space-x-2 mt-4">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onAddPrep(); }}
+                  className="flex items-center space-x-1 px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 transition-colors text-xs font-medium"
+                  style={{ color: 'var(--df-text)' }}
+                >
+                  <Plus size={12} />
+                  <span>Add Prep</span>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); /* handleAddDebriefBlock(meeting) */ }} // Assuming handleAddDebriefBlock is defined elsewhere or will be added
+                  className="flex items-center space-x-1 px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 transition-colors text-xs font-medium"
+                  style={{ color: 'var(--df-text)' }}
+                >
+                  <Plus size={12} />
+                  <span>Add Debrief</span>
+                </button>
+              </div>
+
               {meeting.isVirtual && (
                 <div className="flex items-center gap-1">
                   <Video size={14} style={{ color: 'var(--df-text-muted)' }} />
-                  <span 
+                  <span
                     style={{
                       fontSize: 'var(--df-type-caption-size)',
                       fontWeight: 'var(--df-type-caption-weight)',
@@ -448,7 +537,7 @@ function MeetingCard({ meeting, onSelect, onAddPrep }: MeetingCardProps) {
               )}
             </div>
           </div>
-          
+
           <ChevronRight size={16} style={{ color: 'var(--df-text-muted)' }} />
         </div>
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Brain, Info, Check, TrendingUp, Target, AlertCircle } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -6,6 +6,7 @@ import { Switch } from '../ui/switch';
 import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Separator } from '../ui/separator';
+import { useEstimateMultipliers } from '../../hooks/useEstimateMultipliers';
 
 interface CategoryMultiplier {
   category: string;
@@ -26,8 +27,9 @@ interface LearningSectionProps {
 
 export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
   const [showExplainer, setShowExplainer] = useState(false);
-  
-  // Mock data for category multipliers (in real app, this would come from historical data analysis)
+  const { multipliers: dbMultipliers, toggleDefault: dbToggleDefault, loading: multipliersLoading } = useEstimateMultipliers();
+
+  // Mock data for category multipliers (merged with database data when available)
   const [categoryMultipliers, setCategoryMultipliers] = useState<CategoryMultiplier[]>([
     {
       category: 'Deep Work',
@@ -76,19 +78,52 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
     }
   ]);
 
-  const handleToggleDefault = (category: string) => {
-    setCategoryMultipliers(prev => 
-      prev.map(cat => 
-        cat.category === category 
-          ? { ...cat, isDefault: !cat.isDefault }
+  // Merge database multipliers with local state when available
+  useEffect(() => {
+    if (dbMultipliers.length > 0) {
+      setCategoryMultipliers(prev =>
+        prev.map(cat => {
+          const dbCat = dbMultipliers.find(m => m.category === cat.category);
+          if (dbCat) {
+            return {
+              ...cat,
+              multiplier: dbCat.multiplier,
+              confidence: dbCat.confidence,
+              sampleSize: dbCat.sample_size,
+              isDefault: dbCat.is_default,
+            };
+          }
+          return cat;
+        })
+      );
+    }
+  }, [dbMultipliers]);
+
+  const handleToggleDefault = async (category: string) => {
+    const currentMultiplier = categoryMultipliers.find(cat => cat.category === category);
+    if (!currentMultiplier) return;
+
+    const newIsDefault = !currentMultiplier.isDefault;
+
+    // Optimistically update local state
+    setCategoryMultipliers(prev =>
+      prev.map(cat =>
+        cat.category === category
+          ? { ...cat, isDefault: newIsDefault }
           : cat
       )
     );
 
+    // Persist to database
+    try {
+      await dbToggleDefault(category, newIsDefault);
+    } catch (err) {
+      console.error('Failed to persist multiplier default:', err);
+    }
+
     // Notify parent component
-    const multiplier = categoryMultipliers.find(cat => cat.category === category);
-    if (multiplier && onApplyDefaults) {
-      onApplyDefaults(category, multiplier.multiplier);
+    if (onApplyDefaults) {
+      onApplyDefaults(category, currentMultiplier.multiplier);
     }
   };
 
@@ -119,7 +154,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
   return (
     <section className="mb-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 
+        <h2
           style={{
             fontSize: 'var(--df-type-subtitle-size)',
             fontWeight: 'var(--df-type-subtitle-weight)',
@@ -128,7 +163,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
         >
           Learning
         </h2>
-        
+
         <Button
           variant="ghost"
           size="sm"
@@ -146,16 +181,16 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
 
       {/* Explainer */}
       {showExplainer && (
-        <Alert 
+        <Alert
           className="mb-4"
-          style={{ 
-            borderColor: 'var(--df-primary)', 
+          style={{
+            borderColor: 'var(--df-primary)',
             backgroundColor: 'rgba(37, 99, 235, 0.1)'
           }}
         >
           <Brain size={16} style={{ color: 'var(--df-primary)' }} />
           <AlertDescription style={{ color: 'var(--df-primary)' }}>
-            <strong>Outside-view approach:</strong> These multipliers are based on your actual completion times vs. estimates. 
+            <strong>Outside-view approach:</strong> These multipliers are based on your actual completion times vs. estimates.
             Higher confidence bands indicate more consistent patterns. Apply as defaults to automatically adjust future estimates.
           </AlertDescription>
         </Alert>
@@ -164,7 +199,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
       {/* Category Multipliers */}
       <div className="space-y-3">
         {categoryMultipliers.map((category) => (
-          <Card 
+          <Card
             key={category.category}
             className="p-4"
             style={{
@@ -178,7 +213,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <h4 
+                  <h4
                     style={{
                       fontSize: 'var(--df-type-body-size)',
                       fontWeight: 'var(--df-type-body-weight)',
@@ -189,7 +224,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
                   </h4>
                   {getTrendIcon(category.recentTrend)}
                   {category.isDefault && (
-                    <Badge 
+                    <Badge
                       variant="secondary"
                       style={{
                         backgroundColor: 'var(--df-primary)',
@@ -202,21 +237,21 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
                     </Badge>
                   )}
                 </div>
-                
+
                 <div className="flex items-center gap-4">
                   {/* Main Multiplier */}
                   <div>
-                    <div 
+                    <div
                       style={{
                         fontSize: 'var(--df-type-title-size)',
                         fontWeight: 'var(--df-type-title-weight)',
-                        color: category.multiplier > 1.2 ? 'var(--df-warning)' : 
-                               category.multiplier < 0.9 ? 'var(--df-success)' : 'var(--df-text)'
+                        color: category.multiplier > 1.2 ? 'var(--df-warning)' :
+                          category.multiplier < 0.9 ? 'var(--df-success)' : 'var(--df-text)'
                       }}
                     >
                       {formatMultiplier(category.multiplier)}
                     </div>
-                    <div 
+                    <div
                       style={{
                         fontSize: 'var(--df-type-caption-size)',
                         color: 'var(--df-text-muted)'
@@ -229,7 +264,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
                   {/* Confidence Band */}
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <Badge 
+                      <Badge
                         variant="outline"
                         style={{
                           borderColor: getConfidenceColor(category.confidence),
@@ -240,7 +275,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
                       >
                         {category.confidence} confidence
                       </Badge>
-                      <span 
+                      <span
                         style={{
                           fontSize: 'var(--df-type-caption-size)',
                           color: 'var(--df-text-muted)'
@@ -249,14 +284,14 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
                         ({category.sampleSize} samples)
                       </span>
                     </div>
-                    
+
                     {/* Confidence Band Visualization */}
                     <div className="relative">
-                      <div 
+                      <div
                         className="h-2 rounded-full"
                         style={{ backgroundColor: 'var(--df-border)' }}
                       />
-                      <div 
+                      <div
                         className="absolute top-0 h-2 rounded-full"
                         style={{
                           backgroundColor: getConfidenceColor(category.confidence),
@@ -265,7 +300,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
                           width: `${Math.min(100, (category.confidenceBand.upper - category.confidenceBand.lower) * 50)}%`
                         }}
                       />
-                      <div 
+                      <div
                         className="absolute top-0.5 w-1 h-1 rounded-full"
                         style={{
                           backgroundColor: getConfidenceColor(category.confidence),
@@ -273,8 +308,8 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
                         }}
                       />
                     </div>
-                    
-                    <div 
+
+                    <div
                       className="flex justify-between mt-1"
                       style={{
                         fontSize: 'var(--df-type-caption-size)',
@@ -287,11 +322,11 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
                   </div>
                 </div>
               </div>
-              
+
               {/* Apply Default Toggle */}
               <div className="flex flex-col items-end gap-2">
                 <div className="flex items-center gap-2">
-                  <label 
+                  <label
                     htmlFor={`default-${category.category}`}
                     style={{
                       fontSize: 'var(--df-type-caption-size)',
@@ -306,11 +341,11 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
                     onCheckedChange={() => handleToggleDefault(category.category)}
                   />
                 </div>
-                
+
                 {category.confidence === 'low' && (
                   <div className="flex items-center gap-1">
                     <AlertCircle size={12} style={{ color: 'var(--df-warning)' }} />
-                    <span 
+                    <span
                       style={{
                         fontSize: 'var(--df-type-caption-size)',
                         color: 'var(--df-warning)'
@@ -324,18 +359,18 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
             </div>
 
             {/* Description based on multiplier */}
-            <div 
+            <div
               style={{
                 fontSize: 'var(--df-type-caption-size)',
                 color: 'var(--df-text-muted)',
                 fontStyle: 'italic'
               }}
             >
-              {category.multiplier > 1.5 
+              {category.multiplier > 1.5
                 ? "Tasks typically take much longer than estimated"
-                : category.multiplier > 1.2 
+                : category.multiplier > 1.2
                   ? "Tasks tend to overrun estimates"
-                  : category.multiplier > 0.9 
+                  : category.multiplier > 0.9
                     ? "Estimates are generally accurate"
                     : "Tasks often finish faster than estimated"
               }
@@ -345,7 +380,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
       </div>
 
       {/* Summary Stats */}
-      <Card 
+      <Card
         className="p-4 mt-4"
         style={{
           backgroundColor: 'var(--df-surface-alt)',
@@ -354,7 +389,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
           boxShadow: 'var(--df-shadow-sm)'
         }}
       >
-        <h4 
+        <h4
           className="mb-3"
           style={{
             fontSize: 'var(--df-type-body-size)',
@@ -364,10 +399,10 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
         >
           Learning Summary
         </h4>
-        
+
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <div 
+            <div
               style={{
                 fontSize: 'var(--df-type-title-size)',
                 fontWeight: 'var(--df-type-title-weight)',
@@ -376,7 +411,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
             >
               {categoryMultipliers.filter(cat => cat.isDefault).length}/{categoryMultipliers.length}
             </div>
-            <div 
+            <div
               style={{
                 fontSize: 'var(--df-type-caption-size)',
                 color: 'var(--df-text-muted)'
@@ -385,9 +420,9 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
               Applied as defaults
             </div>
           </div>
-          
+
           <div>
-            <div 
+            <div
               style={{
                 fontSize: 'var(--df-type-title-size)',
                 fontWeight: 'var(--df-type-title-weight)',
@@ -396,7 +431,7 @@ export function LearningSection({ onApplyDefaults }: LearningSectionProps) {
             >
               {categoryMultipliers.filter(cat => cat.confidence === 'high').length}
             </div>
-            <div 
+            <div
               style={{
                 fontSize: 'var(--df-type-caption-size)',
                 color: 'var(--df-text-muted)'

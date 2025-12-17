@@ -1,0 +1,1928 @@
+{
+    "metadata": {
+        "description": "50 Test Cases for Compose Day LLM Evaluation",
+        "version": "1.0.0",
+        "created": "2025-12-15",
+        "categories": [
+            "deep_work",
+            "admin",
+            "meeting",
+            "errand"
+        ],
+        "evaluation_criteria": [
+            "Task-Block Association Accuracy",
+            "Duration Calculation Correctness",
+            "Block Type Homogeneity",
+            "Calendar Event Conflict Avoidance",
+            "Energy-Aware Scheduling",
+            "Working Hours Compliance"
+        ]
+    },
+    "testCases": [
+        {
+            "id": "TC001",
+            "name": "Simple Single Deep Work Task",
+            "description": "Single deep work task with no conflicts",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-001",
+                        "title": "Write Q4 Strategy Document",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 1,
+                "block_type": "deep",
+                "min_duration_minutes": 120,
+                "task_ids_included": [
+                    "task-001"
+                ],
+                "scheduled_in_morning": true
+            }
+        },
+        {
+            "id": "TC002",
+            "name": "Multiple Admin Tasks Bundling",
+            "description": "3 admin tasks should be bundled into one admin block",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-002a",
+                        "title": "Reply to client emails",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-002b",
+                        "title": "Update project tracker",
+                        "category": "admin",
+                        "estimated_duration": "20 mins",
+                        "priority": "low"
+                    },
+                    {
+                        "id": "task-002c",
+                        "title": "File expense report",
+                        "category": "admin",
+                        "estimated_duration": "15 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 1,
+                "block_type": "admin",
+                "min_duration_minutes": 65,
+                "task_ids_included": [
+                    "task-002a",
+                    "task-002b",
+                    "task-002c"
+                ],
+                "homogeneity_required": true
+            }
+        },
+        {
+            "id": "TC003",
+            "name": "Calendar Event Conflict Avoidance",
+            "description": "Task should not overlap with existing calendar event",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-003",
+                        "title": "Code review for authentication module",
+                        "category": "deep_work",
+                        "estimated_duration": "1 hour",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "Team Standup",
+                        "start_at": "2025-12-16T09:00:00+05:30",
+                        "end_at": "2025-12-16T10:00:00+05:30"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 1,
+                "no_overlap_with_events": true,
+                "task_scheduled_after": "10:00"
+            }
+        },
+        {
+            "id": "TC004",
+            "name": "Mixed Task Types Separation",
+            "description": "Deep work and admin tasks must be in separate blocks",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-004a",
+                        "title": "Design database schema",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-004b",
+                        "title": "Pay electricity bill",
+                        "category": "admin",
+                        "estimated_duration": "15 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 2,
+                "blocks_are_homogeneous": true,
+                "deep_block_duration": 120,
+                "admin_block_duration": 15
+            }
+        },
+        {
+            "id": "TC005",
+            "name": "Single Errand Task",
+            "description": "Errand task scheduled in appropriate slot",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-005",
+                        "title": "Pick up groceries from Big Bazaar",
+                        "category": "errand",
+                        "estimated_duration": "45 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 1,
+                "block_type": "errand",
+                "min_duration_minutes": 45,
+                "task_ids_included": [
+                    "task-005"
+                ]
+            }
+        },
+        {
+            "id": "TC006",
+            "name": "Meeting Task Recognition",
+            "description": "Phone call correctly categorized as meeting",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-006",
+                        "title": "Call Mom about weekend plans",
+                        "category": "meeting",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 1,
+                "block_type": "meeting",
+                "min_duration_minutes": 30,
+                "task_ids_included": [
+                    "task-006"
+                ]
+            }
+        },
+        {
+            "id": "TC007",
+            "name": "Multiple Calendar Conflicts",
+            "description": "Task navigates around multiple calendar events",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-007",
+                        "title": "Write unit tests for API",
+                        "category": "deep_work",
+                        "estimated_duration": "1.5 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "Morning Standup",
+                        "start_at": "2025-12-16T09:00:00+05:30",
+                        "end_at": "2025-12-16T09:30:00+05:30"
+                    },
+                    {
+                        "title": "Client Call",
+                        "start_at": "2025-12-16T11:00:00+05:30",
+                        "end_at": "2025-12-16T12:00:00+05:30"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 1,
+                "no_overlap_with_events": true,
+                "fits_in_available_gaps": true
+            }
+        },
+        {
+            "id": "TC008",
+            "name": "Duration Range Parsing - Hours",
+            "description": "1-2 hours range should allocate max duration",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-008",
+                        "title": "Research competitor pricing",
+                        "category": "deep_work",
+                        "estimated_duration": "1-2 hours",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 1,
+                "min_duration_minutes": 120,
+                "uses_max_of_range": true
+            }
+        },
+        {
+            "id": "TC009",
+            "name": "Duration Range Parsing - Minutes",
+            "description": "30-45 mins range should allocate max duration",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-009",
+                        "title": "Review pull requests",
+                        "category": "admin",
+                        "estimated_duration": "30-45 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 1,
+                "min_duration_minutes": 45,
+                "uses_max_of_range": true
+            }
+        },
+        {
+            "id": "TC010",
+            "name": "High Priority First Scheduling",
+            "description": "High priority tasks scheduled before low priority",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-010a",
+                        "title": "Optional cleanup",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "low"
+                    },
+                    {
+                        "id": "task-010b",
+                        "title": "Critical bug fix",
+                        "category": "deep_work",
+                        "estimated_duration": "1 hour",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "high_priority_scheduled_earlier": true,
+                "priority_order_respected": true
+            }
+        },
+        {
+            "id": "TC011",
+            "name": "Energy-Aware Deep Work Morning",
+            "description": "Deep work task should be scheduled during high energy morning hours",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-011",
+                        "title": "Architect new microservices",
+                        "category": "deep_work",
+                        "estimated_duration": "3 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00",
+                    "energy_profile": "Standard (High energy 9AM-12PM)"
+                }
+            },
+            "expected": {
+                "scheduled_before_noon": true,
+                "block_type": "deep",
+                "respects_energy_profile": true
+            }
+        },
+        {
+            "id": "TC012",
+            "name": "Admin Tasks in Afternoon",
+            "description": "Low cognitive admin tasks scheduled in lower energy afternoon",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-012a",
+                        "title": "Sort inbox emails",
+                        "category": "admin",
+                        "estimated_duration": "20 mins",
+                        "priority": "low"
+                    },
+                    {
+                        "id": "task-012b",
+                        "title": "Update team wiki",
+                        "category": "admin",
+                        "estimated_duration": "25 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "scheduled_after_noon": true,
+                "block_type": "admin",
+                "energy_appropriate": true
+            }
+        },
+        {
+            "id": "TC013",
+            "name": "Working Hours Start Boundary",
+            "description": "No tasks scheduled before working hours start",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-013",
+                        "title": "Morning standup prep",
+                        "category": "admin",
+                        "estimated_duration": "15 mins",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "10:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "all_blocks_start_after": "10:00",
+                "respects_working_hours": true
+            }
+        },
+        {
+            "id": "TC014",
+            "name": "Working Hours End Boundary",
+            "description": "No tasks scheduled after working hours end",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-014",
+                        "title": "End of day report",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "17:00"
+                }
+            },
+            "expected": {
+                "all_blocks_end_before": "17:00",
+                "respects_working_hours": true
+            }
+        },
+        {
+            "id": "TC015",
+            "name": "Break Insertion After Long Block",
+            "description": "Break should be inserted after 90 minutes of work",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-015a",
+                        "title": "Deep analysis project",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-015b",
+                        "title": "Follow-up documentation",
+                        "category": "deep_work",
+                        "estimated_duration": "1 hour",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00",
+                    "break_duration": 15,
+                    "break_frequency": 90
+                }
+            },
+            "expected": {
+                "includes_break_blocks": true,
+                "break_after_continuous_work": 90
+            }
+        },
+        {
+            "id": "TC016",
+            "name": "All Four Task Types Together",
+            "description": "Schedule with all four task categories handled correctly",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-016a",
+                        "title": "Write project proposal",
+                        "category": "deep_work",
+                        "estimated_duration": "1.5 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-016b",
+                        "title": "Book flight tickets",
+                        "category": "admin",
+                        "estimated_duration": "20 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-016c",
+                        "title": "Call vendor for quote",
+                        "category": "meeting",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-016d",
+                        "title": "Pickup dry cleaning",
+                        "category": "errand",
+                        "estimated_duration": "30 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count_min": 4,
+                "all_categories_scheduled": true,
+                "no_mixed_type_blocks": true
+            }
+        },
+        {
+            "id": "TC017",
+            "name": "Full Day Calendar Blocked",
+            "description": "Handle day completely blocked by calendar events",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-017",
+                        "title": "Write report",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "All-day Conference",
+                        "start_at": "2025-12-16T09:00:00+05:30",
+                        "end_at": "2025-12-16T18:00:00+05:30"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 0,
+                "reasoning_mentions_no_availability": true
+            }
+        },
+        {
+            "id": "TC018",
+            "name": "Narrow Time Slot Fitting",
+            "description": "Short task fits in narrow gap between events",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-018",
+                        "title": "Quick email check",
+                        "category": "admin",
+                        "estimated_duration": "15 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "Meeting 1",
+                        "start_at": "2025-12-16T09:00:00+05:30",
+                        "end_at": "2025-12-16T10:00:00+05:30"
+                    },
+                    {
+                        "title": "Meeting 2",
+                        "start_at": "2025-12-16T10:30:00+05:30",
+                        "end_at": "2025-12-16T11:30:00+05:30"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "task_fits_in_30min_gap": true,
+                "scheduled_between": [
+                    "10:00",
+                    "10:30"
+                ]
+            }
+        },
+        {
+            "id": "TC019",
+            "name": "Task Too Long for Gap",
+            "description": "Long task cannot fit in small gap, scheduled elsewhere",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-019",
+                        "title": "Deep coding session",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "Morning Block",
+                        "start_at": "2025-12-16T09:00:00+05:30",
+                        "end_at": "2025-12-16T10:00:00+05:30"
+                    },
+                    {
+                        "title": "Late Morning Block",
+                        "start_at": "2025-12-16T10:30:00+05:30",
+                        "end_at": "2025-12-16T12:00:00+05:30"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "not_scheduled_in_30min_gap": true,
+                "scheduled_after": "12:00"
+            }
+        },
+        {
+            "id": "TC020",
+            "name": "No Tasks Edge Case",
+            "description": "Empty task list returns empty schedule gracefully",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_count": 0,
+                "success": true,
+                "reasoning": "No incomplete tasks to schedule"
+            }
+        },
+        {
+            "id": "TC021",
+            "name": "Uncategorized Task Fallback",
+            "description": "Task without category gets inferred type based on title",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-021",
+                        "title": "Design UI mockups for dashboard",
+                        "category": null,
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "inferred_type": "deep",
+                "title_keyword_matched": "design",
+                "fallback_logic_used": true
+            }
+        },
+        {
+            "id": "TC022",
+            "name": "Multiple Errands Bundling",
+            "description": "Multiple errands can be grouped into single errand block",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-022a",
+                        "title": "Buy groceries",
+                        "category": "errand",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-022b",
+                        "title": "Pick up prescription",
+                        "category": "errand",
+                        "estimated_duration": "20 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "can_bundle_errands": true,
+                "total_duration_if_bundled": 50
+            }
+        },
+        {
+            "id": "TC023",
+            "name": "Protected Focus Window Compliance",
+            "description": "No shallow work scheduled in protected focus windows",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-023a",
+                        "title": "Strategic planning",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-023b",
+                        "title": "Check Slack messages",
+                        "category": "admin",
+                        "estimated_duration": "15 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00",
+                    "no_meeting_windows": [
+                        {
+                            "start": "09:00",
+                            "end": "11:00",
+                            "label": "Focus Time"
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "deep_work_in_focus_window": true,
+                "admin_not_in_focus_window": true,
+                "focus_window_protected": true
+            }
+        },
+        {
+            "id": "TC024",
+            "name": "Very Long Deep Work Split",
+            "description": "4+ hour deep work may need to be accommodated properly",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-024",
+                        "title": "Write comprehensive technical documentation",
+                        "category": "deep_work",
+                        "estimated_duration": "4 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "min_duration_minutes": 240,
+                "block_duration_respects_estimate": true
+            }
+        },
+        {
+            "id": "TC025",
+            "name": "Timezone America/New_York",
+            "description": "Correctly handles US Eastern timezone",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "America/New_York",
+                "tasks": [
+                    {
+                        "id": "task-025",
+                        "title": "Morning review",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "9AM EST Meeting",
+                        "start_at": "2025-12-16T09:00:00-05:00",
+                        "end_at": "2025-12-16T10:00:00-05:00"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "17:00"
+                }
+            },
+            "expected": {
+                "timezone_correctly_parsed": true,
+                "no_overlap_with_9am_meeting": true
+            }
+        },
+        {
+            "id": "TC026",
+            "name": "Timezone Europe/London",
+            "description": "Correctly handles UK timezone",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Europe/London",
+                "tasks": [
+                    {
+                        "id": "task-026",
+                        "title": "Team sync call",
+                        "category": "meeting",
+                        "estimated_duration": "45 mins",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "17:30"
+                }
+            },
+            "expected": {
+                "timezone_correctly_parsed": true,
+                "within_uk_working_hours": true
+            }
+        },
+        {
+            "id": "TC027",
+            "name": "Overlapping Calendar Events",
+            "description": "Handle calendar with overlapping events correctly",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-027",
+                        "title": "Quick task",
+                        "category": "admin",
+                        "estimated_duration": "15 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "Meeting A",
+                        "start_at": "2025-12-16T10:00:00+05:30",
+                        "end_at": "2025-12-16T11:30:00+05:30"
+                    },
+                    {
+                        "title": "Meeting B",
+                        "start_at": "2025-12-16T11:00:00+05:30",
+                        "end_at": "2025-12-16T12:00:00+05:30"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "handles_overlapping_events": true,
+                "no_task_scheduled_10_to_12": true
+            }
+        },
+        {
+            "id": "TC028",
+            "name": "High Volume - 10 Tasks",
+            "description": "Stress test with 10 tasks of mixed types",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-028a",
+                        "title": "Write code review",
+                        "category": "deep_work",
+                        "estimated_duration": "1 hour",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-028b",
+                        "title": "Email responses",
+                        "category": "admin",
+                        "estimated_duration": "20 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-028c",
+                        "title": "1:1 with manager",
+                        "category": "meeting",
+                        "estimated_duration": "30 mins",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-028d",
+                        "title": "Gym session",
+                        "category": "errand",
+                        "estimated_duration": "1 hour",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-028e",
+                        "title": "Debug API issue",
+                        "category": "deep_work",
+                        "estimated_duration": "1.5 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-028f",
+                        "title": "Update calendar",
+                        "category": "admin",
+                        "estimated_duration": "10 mins",
+                        "priority": "low"
+                    },
+                    {
+                        "id": "task-028g",
+                        "title": "Call client",
+                        "category": "meeting",
+                        "estimated_duration": "45 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-028h",
+                        "title": "Buy office supplies",
+                        "category": "errand",
+                        "estimated_duration": "30 mins",
+                        "priority": "low"
+                    },
+                    {
+                        "id": "task-028i",
+                        "title": "Write documentation",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-028j",
+                        "title": "Review invoices",
+                        "category": "admin",
+                        "estimated_duration": "15 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "all_10_tasks_scheduled": true,
+                "no_duplicate_task_ids": true,
+                "total_duration_matches": true
+            }
+        },
+        {
+            "id": "TC029",
+            "name": "Task ID Hallucination Check",
+            "description": "Verify LLM uses exact task IDs from input",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "550e8400-e29b-41d4-a716-446655440001",
+                        "title": "Real task with UUID",
+                        "category": "deep_work",
+                        "estimated_duration": "1 hour",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "exact_task_id_used": "550e8400-e29b-41d4-a716-446655440001",
+                "no_placeholder_ids": true,
+                "no_uuid1_uuid2_etc": true
+            }
+        },
+        {
+            "id": "TC030",
+            "name": "Block Title Descriptiveness",
+            "description": "Block title should reference actual task name",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-030",
+                        "title": "Write Q1 Marketing Strategy",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "block_title_contains_task_name": true,
+                "not_generic_like": [
+                    "Deep Work Block",
+                    "Block 1",
+                    "Morning Block"
+                ]
+            }
+        },
+        {
+            "id": "TC031",
+            "name": "Short Duration Precision",
+            "description": "15 minute task should get exactly 15 minutes",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-031",
+                        "title": "Quick standup note",
+                        "category": "admin",
+                        "estimated_duration": "15 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "exact_duration_minutes": 15,
+                "not_rounded_to_30": true
+            }
+        },
+        {
+            "id": "TC032",
+            "name": "Keyword Detection - Call",
+            "description": "Call keyword infers meeting type when uncategorized",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-032",
+                        "title": "Call the bank regarding loan",
+                        "category": null,
+                        "estimated_duration": "20 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "inferred_type": "meeting",
+                "keyword_matched": "call"
+            }
+        },
+        {
+            "id": "TC033",
+            "name": "Keyword Detection - Grocery",
+            "description": "Grocery keyword infers errand type when uncategorized",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-033",
+                        "title": "Grocery shopping at supermarket",
+                        "category": null,
+                        "estimated_duration": "45 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "inferred_type": "errand",
+                "keyword_matched": "grocery"
+            }
+        },
+        {
+            "id": "TC034",
+            "name": "Keyword Detection - Strategy",
+            "description": "Strategy keyword infers deep work type when uncategorized",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-034",
+                        "title": "Develop pricing strategy",
+                        "category": null,
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "inferred_type": "deep",
+                "keyword_matched": "strategy"
+            }
+        },
+        {
+            "id": "TC035",
+            "name": "Back-to-Back Deep Work Sessions",
+            "description": "Two deep work tasks without break should trigger break insertion",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-035a",
+                        "title": "Code feature A",
+                        "category": "deep_work",
+                        "estimated_duration": "1.5 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-035b",
+                        "title": "Code feature B",
+                        "category": "deep_work",
+                        "estimated_duration": "1.5 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00",
+                    "break_duration": 15,
+                    "break_frequency": 90
+                }
+            },
+            "expected": {
+                "break_between_blocks": true,
+                "total_break_time_minutes": 15
+            }
+        },
+        {
+            "id": "TC036",
+            "name": "Weekend Day Handling",
+            "description": "System handles weekend scheduling correctly",
+            "input": {
+                "date": "2025-12-20",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-036",
+                        "title": "Personal project",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "10:00",
+                    "working_hours_end": "16:00"
+                }
+            },
+            "expected": {
+                "saturday_scheduling_works": true,
+                "respects_custom_hours": true
+            }
+        },
+        {
+            "id": "TC037",
+            "name": "Very Short Working Hours",
+            "description": "Handle 4-hour working day correctly",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-037a",
+                        "title": "Meeting prep",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-037b",
+                        "title": "Core work",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-037c",
+                        "title": "Follow-up",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "13:00"
+                }
+            },
+            "expected": {
+                "fits_in_4_hour_window": true,
+                "prioritizes_correctly": true
+            }
+        },
+        {
+            "id": "TC038",
+            "name": "Late Night Working Hours",
+            "description": "Handle night owl schedule",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-038",
+                        "title": "Night coding session",
+                        "category": "deep_work",
+                        "estimated_duration": "3 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "20:00",
+                    "working_hours_end": "02:00"
+                }
+            },
+            "expected": {
+                "handles_overnight_hours": true,
+                "scheduled_in_evening": true
+            }
+        },
+        {
+            "id": "TC039",
+            "name": "Duration Calculation Chain-of-Thought",
+            "description": "Verify LLM provides correct duration calculation",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-039a",
+                        "title": "Task A",
+                        "category": "admin",
+                        "estimated_duration": "45 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-039b",
+                        "title": "Task B",
+                        "category": "admin",
+                        "estimated_duration": "35 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "duration_calculation_present": true,
+                "total_minutes_required": 80,
+                "block_duration_gte_80_mins": true
+            }
+        },
+        {
+            "id": "TC040",
+            "name": "External Bundle Constraint",
+            "description": "Respect external bundle constraints from orchestrator",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-040",
+                        "title": "Free task",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [],
+                "bundle_constraints": [
+                    {
+                        "start": "2025-12-16T14:00:00+05:30",
+                        "end": "2025-12-16T15:30:00+05:30",
+                        "reason": "Errand Bundle: Groceries + Pharmacy"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "respects_bundle_constraint": true,
+                "admin_not_scheduled_14_to_1530": true
+            }
+        },
+        {
+            "id": "TC041",
+            "name": "Real-World Day - Busy Professional",
+            "description": "Complex realistic day for a busy professional",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-041a",
+                        "title": "Prepare quarterly presentation",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-041b",
+                        "title": "Call with investors",
+                        "category": "meeting",
+                        "estimated_duration": "1 hour",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-041c",
+                        "title": "Review candidate resumes",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-041d",
+                        "title": "Pick up suit from tailor",
+                        "category": "errand",
+                        "estimated_duration": "20 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "Board Meeting",
+                        "start_at": "2025-12-16T11:00:00+05:30",
+                        "end_at": "2025-12-16T12:30:00+05:30"
+                    },
+                    {
+                        "title": "Lunch with partner",
+                        "start_at": "2025-12-16T13:00:00+05:30",
+                        "end_at": "2025-12-16T14:00:00+05:30"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "all_tasks_scheduled": true,
+                "no_calendar_overlap": true,
+                "deep_work_morning": true
+            }
+        },
+        {
+            "id": "TC042",
+            "name": "Real-World Day - Remote Worker",
+            "description": "Typical remote worker day",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "America/Los_Angeles",
+                "tasks": [
+                    {
+                        "id": "task-042a",
+                        "title": "Morning standup notes",
+                        "category": "admin",
+                        "estimated_duration": "15 mins",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-042b",
+                        "title": "Sprint planning",
+                        "category": "meeting",
+                        "estimated_duration": "1 hour",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-042c",
+                        "title": "Build feature X",
+                        "category": "deep_work",
+                        "estimated_duration": "3 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-042d",
+                        "title": "Gym workout",
+                        "category": "errand",
+                        "estimated_duration": "1 hour",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "Daily Standup",
+                        "start_at": "2025-12-16T09:00:00-08:00",
+                        "end_at": "2025-12-16T09:15:00-08:00"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "08:30",
+                    "working_hours_end": "17:30"
+                }
+            },
+            "expected": {
+                "pst_timezone_handled": true,
+                "all_tasks_fit": true
+            }
+        },
+        {
+            "id": "TC043",
+            "name": "Real-World Day - Freelancer",
+            "description": "Freelancer with flexible schedule",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Europe/Berlin",
+                "tasks": [
+                    {
+                        "id": "task-043a",
+                        "title": "Client deliverable",
+                        "category": "deep_work",
+                        "estimated_duration": "4 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-043b",
+                        "title": "Invoice clients",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-043c",
+                        "title": "Networking call",
+                        "category": "meeting",
+                        "estimated_duration": "30 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "10:00",
+                    "working_hours_end": "19:00"
+                }
+            },
+            "expected": {
+                "cet_timezone_handled": true,
+                "deep_work_prioritized": true
+            }
+        },
+        {
+            "id": "TC044",
+            "name": "Conflicting Priorities",
+            "description": "Multiple high priority tasks compete for morning slot",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-044a",
+                        "title": "Urgent bug fix",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-044b",
+                        "title": "Client emergency call",
+                        "category": "meeting",
+                        "estimated_duration": "1 hour",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-044c",
+                        "title": "Deadline report",
+                        "category": "deep_work",
+                        "estimated_duration": "1.5 hours",
+                        "priority": "high"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "all_high_priority_scheduled": true,
+                "reasonable_ordering": true
+            }
+        },
+        {
+            "id": "TC045",
+            "name": "Minimum 60-Min Deep Work Rule",
+            "description": "Deep work blocks should be at least 60 minutes",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-045",
+                        "title": "Quick code fix",
+                        "category": "deep_work",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "deep_block_min_60_mins": true,
+                "or_task_correctly_categorized": true
+            }
+        },
+        {
+            "id": "TC046",
+            "name": "All Day Event Handling",
+            "description": "Handle all-day calendar events correctly",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-046",
+                        "title": "Prep work",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "Holiday",
+                        "start_at": "2025-12-16T00:00:00+05:30",
+                        "end_at": "2025-12-17T00:00:00+05:30",
+                        "all_day": true
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "handles_all_day_event": true,
+                "may_block_entire_day": true
+            }
+        },
+        {
+            "id": "TC047",
+            "name": "Interruption Budget Compliance",
+            "description": "Respect max daily interruptions setting",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-047a",
+                        "title": "Deep focus 1",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-047b",
+                        "title": "Quick call 1",
+                        "category": "meeting",
+                        "estimated_duration": "15 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-047c",
+                        "title": "Quick call 2",
+                        "category": "meeting",
+                        "estimated_duration": "15 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-047d",
+                        "title": "Quick call 3",
+                        "category": "meeting",
+                        "estimated_duration": "15 mins",
+                        "priority": "low"
+                    },
+                    {
+                        "id": "task-047e",
+                        "title": "Quick call 4",
+                        "category": "meeting",
+                        "estimated_duration": "15 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00",
+                    "interruption_budget": 3
+                }
+            },
+            "expected": {
+                "max_interruptions_respected": true,
+                "may_batch_low_priority_meetings": true
+            }
+        },
+        {
+            "id": "TC048",
+            "name": "Consecutive Same-Type Tasks",
+            "description": "Multiple admin tasks can be in one contiguous block",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-048a",
+                        "title": "Email 1",
+                        "category": "admin",
+                        "estimated_duration": "10 mins",
+                        "priority": "low"
+                    },
+                    {
+                        "id": "task-048b",
+                        "title": "Email 2",
+                        "category": "admin",
+                        "estimated_duration": "10 mins",
+                        "priority": "low"
+                    },
+                    {
+                        "id": "task-048c",
+                        "title": "Email 3",
+                        "category": "admin",
+                        "estimated_duration": "10 mins",
+                        "priority": "low"
+                    },
+                    {
+                        "id": "task-048d",
+                        "title": "Email 4",
+                        "category": "admin",
+                        "estimated_duration": "10 mins",
+                        "priority": "low"
+                    },
+                    {
+                        "id": "task-048e",
+                        "title": "Email 5",
+                        "category": "admin",
+                        "estimated_duration": "10 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "single_admin_block_possible": true,
+                "total_duration_50_mins": true,
+                "all_5_task_ids_in_block": true
+            }
+        },
+        {
+            "id": "TC049",
+            "name": "Empty Calendar Many Tasks",
+            "description": "Optimize full day with many tasks and no meetings",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "task-049a",
+                        "title": "Project A coding",
+                        "category": "deep_work",
+                        "estimated_duration": "2 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-049b",
+                        "title": "Project B design",
+                        "category": "deep_work",
+                        "estimated_duration": "1.5 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "task-049c",
+                        "title": "Admin batch",
+                        "category": "admin",
+                        "estimated_duration": "45 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-049d",
+                        "title": "Gym",
+                        "category": "errand",
+                        "estimated_duration": "1 hour",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "task-049e",
+                        "title": "Groceries",
+                        "category": "errand",
+                        "estimated_duration": "30 mins",
+                        "priority": "low"
+                    }
+                ],
+                "calendar_events": [],
+                "user_preferences": {
+                    "working_hours_start": "08:00",
+                    "working_hours_end": "18:00"
+                }
+            },
+            "expected": {
+                "optimal_day_structure": true,
+                "deep_work_morning": true,
+                "errands_can_be_bundled": true
+            }
+        },
+        {
+            "id": "TC050",
+            "name": "End-to-End Full Complexity",
+            "description": "Ultimate stress test with all features",
+            "input": {
+                "date": "2025-12-16",
+                "timezone": "Asia/Kolkata",
+                "tasks": [
+                    {
+                        "id": "uuid-50a",
+                        "title": "Write annual strategy plan",
+                        "category": "deep_work",
+                        "estimated_duration": "3 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "uuid-50b",
+                        "title": "Call with CEO",
+                        "category": "meeting",
+                        "estimated_duration": "1 hour",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "uuid-50c",
+                        "title": "Review team expenses",
+                        "category": "admin",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "uuid-50d",
+                        "title": "Email board updates",
+                        "category": "admin",
+                        "estimated_duration": "20 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "uuid-50e",
+                        "title": "Pick up catering order",
+                        "category": "errand",
+                        "estimated_duration": "30 mins",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "uuid-50f",
+                        "title": "Sync with marketing lead",
+                        "category": "meeting",
+                        "estimated_duration": "30 mins",
+                        "priority": "medium"
+                    },
+                    {
+                        "id": "uuid-50g",
+                        "title": "Debug production issue",
+                        "category": "deep_work",
+                        "estimated_duration": "1.5 hours",
+                        "priority": "high"
+                    },
+                    {
+                        "id": "uuid-50h",
+                        "title": "Update project roadmap",
+                        "category": null,
+                        "estimated_duration": "45 mins",
+                        "priority": "medium"
+                    }
+                ],
+                "calendar_events": [
+                    {
+                        "title": "Morning Standup",
+                        "start_at": "2025-12-16T09:00:00+05:30",
+                        "end_at": "2025-12-16T09:15:00+05:30"
+                    },
+                    {
+                        "title": "Lunch with investor",
+                        "start_at": "2025-12-16T12:30:00+05:30",
+                        "end_at": "2025-12-16T13:30:00+05:30"
+                    },
+                    {
+                        "title": "Board Call",
+                        "start_at": "2025-12-16T16:00:00+05:30",
+                        "end_at": "2025-12-16T17:00:00+05:30"
+                    }
+                ],
+                "user_preferences": {
+                    "working_hours_start": "09:00",
+                    "working_hours_end": "18:00",
+                    "break_duration": 15,
+                    "break_frequency": 90,
+                    "interruption_budget": 4,
+                    "no_meeting_windows": [
+                        {
+                            "start": "09:15",
+                            "end": "11:00",
+                            "label": "Focus Time"
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "all_8_tasks_scheduled": true,
+                "no_calendar_overlap": true,
+                "exact_task_ids_used": [
+                    "uuid-50a",
+                    "uuid-50b",
+                    "uuid-50c",
+                    "uuid-50d",
+                    "uuid-50e",
+                    "uuid-50f",
+                    "uuid-50g",
+                    "uuid-50h"
+                ],
+                "deep_work_in_focus_window": true,
+                "block_homogeneity": true,
+                "duration_calculations_correct": true,
+                "fallback_categorization_for_50h": true,
+                "breaks_inserted": true
+            }
+        }
+    ]
+}

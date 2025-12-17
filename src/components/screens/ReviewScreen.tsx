@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Target, 
-  Clock, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Target,
+  Clock,
   Zap,
   CheckCircle2,
   AlertTriangle,
@@ -23,6 +23,7 @@ import { Sparkline } from '../ui/sparkline';
 import { useDataStore } from '../../hooks/useSimpleDataStore';
 import { projectId, publicAnonKey } from '../../utils/supabase/info';
 import { useEdgeFunctions } from '../../hooks/useEdgeFunctions';
+import { useBlockerAnalytics } from '../../hooks/useBlockerAnalytics';
 import { LearningSection } from '../review/LearningSection';
 import { WeeklyStatusGenerator } from '../review/WeeklyStatusGenerator';
 
@@ -60,7 +61,8 @@ export function ReviewScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showTrends, setShowTrends] = useState(false);
   const { summarizeReflection } = useEdgeFunctions();
-  
+  const { blockers: realBlockers, loading: blockersLoading } = useBlockerAnalytics();
+
   // Reflection form state
   const [reflection, setReflection] = useState<DailyReflection>({
     wins: '',
@@ -69,7 +71,7 @@ export function ReviewScreen() {
     blockerTags: [],
     date: new Date().toISOString().split('T')[0]
   });
-  
+
   // Mock data for trends (in real app, this would come from DataStore)
   const estimateErrors: EstimateError[] = [
     {
@@ -89,11 +91,14 @@ export function ReviewScreen() {
     }
   ];
 
-  const topBlockers: WeeklyBlocker[] = [
-    { name: 'Interruptions', count: 12, trend: 'up' },
-    { name: 'Time Overrun', count: 8, trend: 'down' },
-    { name: 'Missing Info', count: 5, trend: 'stable' }
-  ];
+  // Use real blocker data if available, otherwise fall back to mock data
+  const topBlockers: WeeklyBlocker[] = realBlockers.length > 0
+    ? realBlockers
+    : [
+      { name: 'Interruptions', count: 12, trend: 'up' },
+      { name: 'Time Overrun', count: 8, trend: 'down' },
+      { name: 'Missing Info', count: 5, trend: 'stable' }
+    ];
 
   const handleBlockerTagToggle = (tagId: string) => {
     setReflection(prev => ({
@@ -110,12 +115,12 @@ export function ReviewScreen() {
     }
 
     setIsSubmitting(true);
-    
+
     try {
       // Call edge function to summarize reflection and store in DB
       const result = await summarizeReflection(
         reflection.wins,
-        reflection.blockers, 
+        reflection.blockers,
         reflection.changeForTomorrow
       );
 
@@ -144,18 +149,18 @@ export function ReviewScreen() {
   };
 
   const today = new Date();
-  const formattedDate = today.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    month: 'short', 
-    day: 'numeric' 
+  const formattedDate = today.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric'
   });
 
   return (
     <div className="flex flex-col h-full">
       {/* Top App Bar */}
-      <div 
+      <div
         className="flex items-center justify-between px-4 py-3 border-b"
-        style={{ 
+        style={{
           backgroundColor: 'var(--df-surface)',
           borderBottomColor: 'var(--df-border)',
           paddingTop: 'calc(env(safe-area-inset-top, 0) + 12px)',
@@ -163,7 +168,7 @@ export function ReviewScreen() {
         }}
       >
         <div>
-          <h1 
+          <h1
             style={{
               fontSize: 'var(--df-type-title-size)',
               fontWeight: 'var(--df-type-title-weight)',
@@ -173,7 +178,7 @@ export function ReviewScreen() {
           >
             Review
           </h1>
-          <p 
+          <p
             style={{
               fontSize: 'var(--df-type-caption-size)',
               color: 'var(--df-text-muted)'
@@ -182,7 +187,7 @@ export function ReviewScreen() {
             {formattedDate}
           </p>
         </div>
-        
+
         <Button
           variant="outline"
           size="sm"
@@ -200,7 +205,7 @@ export function ReviewScreen() {
       </div>
 
       {/* Content */}
-      <div 
+      <div
         className="flex-1 overflow-auto px-4 py-4"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0) + 24px)' }}
       >
@@ -209,7 +214,7 @@ export function ReviewScreen() {
           <>
             {/* Daily Reflection Form */}
             <section className="mb-6">
-              <h2 
+              <h2
                 className="mb-4"
                 style={{
                   fontSize: 'var(--df-type-subtitle-size)',
@@ -223,7 +228,7 @@ export function ReviewScreen() {
               <div className="space-y-6">
                 {/* Wins */}
                 <div>
-                  <label 
+                  <label
                     className="flex items-center mb-3"
                     style={{
                       fontSize: 'var(--df-type-body-size)',
@@ -231,8 +236,8 @@ export function ReviewScreen() {
                       color: 'var(--df-text)'
                     }}
                   >
-                    <CheckCircle2 
-                      size={20} 
+                    <CheckCircle2
+                      size={20}
                       style={{ color: 'var(--df-success)', marginRight: 'var(--df-space-8)' }}
                     />
                     What went well today?
@@ -254,7 +259,7 @@ export function ReviewScreen() {
 
                 {/* Blockers */}
                 <div>
-                  <label 
+                  <label
                     className="flex items-center mb-3"
                     style={{
                       fontSize: 'var(--df-type-body-size)',
@@ -262,8 +267,8 @@ export function ReviewScreen() {
                       color: 'var(--df-text)'
                     }}
                   >
-                    <AlertTriangle 
-                      size={20} 
+                    <AlertTriangle
+                      size={20}
                       style={{ color: 'var(--df-warning)', marginRight: 'var(--df-space-8)' }}
                     />
                     What blocked or slowed you down?
@@ -281,10 +286,10 @@ export function ReviewScreen() {
                       borderRadius: 'var(--df-radius-sm)'
                     }}
                   />
-                  
+
                   {/* Quick Blocker Tags */}
                   <div className="mt-3">
-                    <p 
+                    <p
                       className="mb-2"
                       style={{
                         fontSize: 'var(--df-type-caption-size)',
@@ -317,7 +322,7 @@ export function ReviewScreen() {
 
                 {/* Change for Tomorrow */}
                 <div>
-                  <label 
+                  <label
                     className="flex items-center mb-3"
                     style={{
                       fontSize: 'var(--df-type-body-size)',
@@ -325,8 +330,8 @@ export function ReviewScreen() {
                       color: 'var(--df-text)'
                     }}
                   >
-                    <Sparkles 
-                      size={20} 
+                    <Sparkles
+                      size={20}
                       style={{ color: 'var(--df-primary)', marginRight: 'var(--df-space-8)' }}
                     />
                     What will you change tomorrow?
@@ -373,10 +378,10 @@ export function ReviewScreen() {
             </section>
 
             {/* Helper Note */}
-            <Alert 
+            <Alert
               className="mb-6"
-              style={{ 
-                borderColor: 'var(--df-primary)', 
+              style={{
+                borderColor: 'var(--df-primary)',
                 backgroundColor: 'rgba(37, 99, 235, 0.1)'
               }}
             >
@@ -387,7 +392,7 @@ export function ReviewScreen() {
             </Alert>
 
             {/* Today's Summary */}
-            <TodaySummaryCard />
+            <TodaySummaryCard tasks={data.tasks} />
           </>
         ) : (
           // Trends View
@@ -399,7 +404,7 @@ export function ReviewScreen() {
 
             {/* Estimate Accuracy Trends */}
             <section className="mb-6">
-              <h2 
+              <h2
                 className="mb-4"
                 style={{
                   fontSize: 'var(--df-type-subtitle-size)',
@@ -409,7 +414,7 @@ export function ReviewScreen() {
               >
                 Estimate Accuracy by Task Type
               </h2>
-              
+
               <div className="space-y-3">
                 {estimateErrors.map((error) => (
                   <EstimateErrorCard key={error.taskType} error={error} />
@@ -421,7 +426,7 @@ export function ReviewScreen() {
 
             {/* Top Blockers This Week */}
             <section className="mb-6">
-              <h2 
+              <h2
                 className="mb-4"
                 style={{
                   fontSize: 'var(--df-type-subtitle-size)',
@@ -431,7 +436,7 @@ export function ReviewScreen() {
               >
                 Top 3 Blockers This Week
               </h2>
-              
+
               <div className="space-y-3">
                 {topBlockers.map((blocker, index) => (
                   <TopBlockerCard key={blocker.name} blocker={blocker} rank={index + 1} />
@@ -442,11 +447,11 @@ export function ReviewScreen() {
             <Separator className="mb-6" style={{ backgroundColor: 'var(--df-border)' }} />
 
             {/* Learning Section */}
-            <LearningSection 
+            <LearningSection
               onApplyDefaults={(category, multiplier) => {
                 console.log(`Applied ${multiplier}x multiplier as default for ${category}`);
                 // In real app, this would update user preferences in DataStore
-              }} 
+              }}
             />
 
             <Separator className="mb-6" style={{ backgroundColor: 'var(--df-border)' }} />
@@ -461,9 +466,24 @@ export function ReviewScreen() {
 }
 
 // Today's Summary Component
-function TodaySummaryCard() {
+interface TodaySummaryCardProps {
+  tasks: Array<{ id: string; completed: boolean; est_most?: number }>;
+}
+
+function TodaySummaryCard({ tasks }: TodaySummaryCardProps) {
+  // Calculate real stats from tasks
+  const completedTasks = tasks.filter(t => t.completed).length;
+  const totalTasks = tasks.length;
+
+  // Calculate estimated focus hours from incomplete deep work tasks
+  // Using est_most (estimated time in minutes) and converting to hours
+  const estimatedFocusMinutes = tasks
+    .filter(t => !t.completed && t.est_most)
+    .reduce((sum, t) => sum + (t.est_most || 0), 0);
+  const focusHours = (estimatedFocusMinutes / 60).toFixed(1);
+
   return (
-    <Card 
+    <Card
       className="p-4"
       style={{
         backgroundColor: 'var(--df-surface-alt)',
@@ -472,7 +492,7 @@ function TodaySummaryCard() {
         boxShadow: 'var(--df-shadow-sm)'
       }}
     >
-      <h3 
+      <h3
         className="mb-3"
         style={{
           fontSize: 'var(--df-type-body-size)',
@@ -482,45 +502,45 @@ function TodaySummaryCard() {
       >
         Today at a Glance
       </h3>
-      
+
       <div className="grid grid-cols-2 gap-4">
         <div className="text-center">
-          <div 
+          <div
             style={{
               fontSize: 'var(--df-type-title-size)',
               fontWeight: 'var(--df-type-title-weight)',
-              color: 'var(--df-success)'
+              color: completedTasks > 0 ? 'var(--df-success)' : 'var(--df-text-muted)'
             }}
           >
-            3/4
+            {completedTasks}/{totalTasks}
           </div>
-          <div 
+          <div
             style={{
               fontSize: 'var(--df-type-caption-size)',
               color: 'var(--df-text-muted)'
             }}
           >
-            Outcomes
+            Tasks Done
           </div>
         </div>
-        
+
         <div className="text-center">
-          <div 
+          <div
             style={{
               fontSize: 'var(--df-type-title-size)',
               fontWeight: 'var(--df-type-title-weight)',
               color: 'var(--df-primary)'
             }}
           >
-            4.2h
+            {focusHours}h
           </div>
-          <div 
+          <div
             style={{
               fontSize: 'var(--df-type-caption-size)',
               color: 'var(--df-text-muted)'
             }}
           >
-            Focus Time
+            Est. Remaining
           </div>
         </div>
       </div>
@@ -536,9 +556,9 @@ interface EstimateErrorCardProps {
 function EstimateErrorCard({ error }: EstimateErrorCardProps) {
   const isOverEstimate = error.actualVsEstimate > 100;
   const errorPercentage = Math.abs(error.actualVsEstimate - 100);
-  
+
   return (
-    <Card 
+    <Card
       className="p-4"
       style={{
         backgroundColor: 'var(--df-surface)',
@@ -548,7 +568,7 @@ function EstimateErrorCard({ error }: EstimateErrorCardProps) {
       }}
     >
       <div className="flex items-center justify-between mb-2">
-        <h4 
+        <h4
           style={{
             fontSize: 'var(--df-type-body-size)',
             fontWeight: 'var(--df-type-body-weight)',
@@ -557,9 +577,9 @@ function EstimateErrorCard({ error }: EstimateErrorCardProps) {
         >
           {error.taskType}
         </h4>
-        
+
         <div className="text-right">
-          <div 
+          <div
             style={{
               fontSize: 'var(--df-type-body-size)',
               fontWeight: 'var(--df-type-body-weight)',
@@ -568,7 +588,7 @@ function EstimateErrorCard({ error }: EstimateErrorCardProps) {
           >
             {isOverEstimate ? '+' : '-'}{errorPercentage}%
           </div>
-          <div 
+          <div
             style={{
               fontSize: 'var(--df-type-caption-size)',
               color: 'var(--df-text-muted)'
@@ -578,10 +598,10 @@ function EstimateErrorCard({ error }: EstimateErrorCardProps) {
           </div>
         </div>
       </div>
-      
+
       {/* Sparkline Chart */}
       <div className="flex justify-center mt-2">
-        <Sparkline 
+        <Sparkline
           data={error.weekData}
           width={120}
           height={32}
@@ -612,7 +632,7 @@ function TopBlockerCard({ blocker, rank }: TopBlockerCardProps) {
   };
 
   return (
-    <Card 
+    <Card
       className="p-4"
       style={{
         backgroundColor: 'var(--df-surface)',
@@ -623,7 +643,7 @@ function TopBlockerCard({ blocker, rank }: TopBlockerCardProps) {
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div 
+          <div
             className="w-6 h-6 rounded-full flex items-center justify-center"
             style={{
               backgroundColor: rank === 1 ? 'var(--df-danger)' : rank === 2 ? 'var(--df-warning)' : 'var(--df-primary)',
@@ -634,9 +654,9 @@ function TopBlockerCard({ blocker, rank }: TopBlockerCardProps) {
           >
             {rank}
           </div>
-          
+
           <div>
-            <h4 
+            <h4
               style={{
                 fontSize: 'var(--df-type-body-size)',
                 fontWeight: 'var(--df-type-body-weight)',
@@ -645,7 +665,7 @@ function TopBlockerCard({ blocker, rank }: TopBlockerCardProps) {
             >
               {blocker.name}
             </h4>
-            <p 
+            <p
               style={{
                 fontSize: 'var(--df-type-caption-size)',
                 color: 'var(--df-text-muted)'
@@ -655,7 +675,7 @@ function TopBlockerCard({ blocker, rank }: TopBlockerCardProps) {
             </p>
           </div>
         </div>
-        
+
         {getTrendIcon()}
       </div>
     </Card>
@@ -665,7 +685,7 @@ function TopBlockerCard({ blocker, rank }: TopBlockerCardProps) {
 // Weekly Summary Card Component
 function WeeklySummaryCard() {
   return (
-    <Card 
+    <Card
       className="p-4"
       style={{
         backgroundColor: 'var(--df-surface-alt)',
@@ -674,7 +694,7 @@ function WeeklySummaryCard() {
         boxShadow: 'var(--df-shadow-sm)'
       }}
     >
-      <h3 
+      <h3
         className="mb-4"
         style={{
           fontSize: 'var(--df-type-body-size)',
@@ -684,10 +704,10 @@ function WeeklySummaryCard() {
       >
         This Week's Performance
       </h3>
-      
+
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <div 
+          <div
             style={{
               fontSize: 'var(--df-type-title-size)',
               fontWeight: 'var(--df-type-title-weight)',
@@ -696,7 +716,7 @@ function WeeklySummaryCard() {
           >
             85%
           </div>
-          <div 
+          <div
             style={{
               fontSize: 'var(--df-type-caption-size)',
               color: 'var(--df-text-muted)'
@@ -705,9 +725,9 @@ function WeeklySummaryCard() {
             Estimate Accuracy
           </div>
         </div>
-        
+
         <div>
-          <div 
+          <div
             style={{
               fontSize: 'var(--df-type-title-size)',
               fontWeight: 'var(--df-type-title-weight)',
@@ -716,7 +736,7 @@ function WeeklySummaryCard() {
           >
             18.5h
           </div>
-          <div 
+          <div
             style={{
               fontSize: 'var(--df-type-caption-size)',
               color: 'var(--df-text-muted)'

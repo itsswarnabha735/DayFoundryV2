@@ -35,6 +35,8 @@ export async function callGeminiWithRetry(
     prompt: string,
     options: {
         responseMimeType?: string;
+        responseJsonSchema?: any; // New: Support for Structured Output schema
+        thinkingConfig?: { thinkingLevel: "low" | "high" }; // New: Support for Gemini 3 Thinking
         agentName?: string;
         retryConfig?: Partial<RetryConfig>;
     } = {}
@@ -48,11 +50,27 @@ export async function callGeminiWithRetry(
         try {
             logger.info(agentName, `LLM API call attempt ${attempt}/${config.maxRetries}`, {
                 model,
-                promptLength: prompt.length
+                promptLength: prompt.length,
+                thinkingLevel: options.thinkingConfig?.thinkingLevel,
+                hasJsonSchema: !!options.responseJsonSchema
             });
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
+
+            // Construct Generation Config
+            const generationConfig: any = {
+                responseMimeType: options.responseMimeType || 'application/json'
+            };
+
+            // Add new optional configs if present
+            if (options.responseJsonSchema) {
+                generationConfig.responseMimeType = 'application/json'; // Strict schema implies JSON
+                generationConfig.responseJsonSchema = options.responseJsonSchema;
+            }
+            if (options.thinkingConfig) {
+                generationConfig.thinkingConfig = options.thinkingConfig;
+            }
 
             const response = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -61,9 +79,7 @@ export async function callGeminiWithRetry(
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: {
-                            response_mime_type: options.responseMimeType || 'application/json'
-                        }
+                        generationConfig: generationConfig
                     }),
                     signal: controller.signal
                 }

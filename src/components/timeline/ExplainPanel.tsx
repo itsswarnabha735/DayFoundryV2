@@ -14,9 +14,10 @@ interface ScheduleChange {
 interface ExplainPanelProps {
   changes: ScheduleChange[];
   reasoning?: string;
+  proposedBlocks?: any[];
 }
 
-export function ExplainPanel({ changes, reasoning }: ExplainPanelProps) {
+export function ExplainPanel({ changes, reasoning, proposedBlocks }: ExplainPanelProps) {
 
   const formatTime = (time: string) => {
     if (!time) return '';
@@ -280,6 +281,89 @@ export function ExplainPanel({ changes, reasoning }: ExplainPanelProps) {
           </ul>
         </div>
       </div>
+      {/* Detailed Schedule Breakdown */}
+      {proposedBlocks && proposedBlocks.length > 0 && (
+        <div className="pt-2">
+          <h3
+            className="mb-3"
+            style={{
+              fontSize: 'var(--df-type-body-size)',
+              fontWeight: 'var(--df-type-body-weight)',
+              color: 'var(--df-text)'
+            }}
+          >
+            Detailed Schedule Breakdown
+          </h3>
+
+          <div className="space-y-4">
+            {proposedBlocks.map((block, index) => (
+              <div
+                key={index}
+                className="p-3 rounded border"
+                style={{
+                  backgroundColor: 'var(--df-surface)',
+                  borderColor: 'var(--df-border)',
+                  borderRadius: 'var(--df-radius-md)'
+                }}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4
+                      className="font-medium"
+                      style={{ color: 'var(--df-text)', fontSize: 'var(--df-type-body-size)' }}
+                    >
+                      {block.title}
+                    </h4>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Badge variant="outline" className="text-xs">
+                        {block.type}
+                      </Badge>
+                      <span style={{ color: 'var(--df-text-muted)', fontSize: '12px' }}>
+                        {formatTime(block.startTime)} - {formatTime(block.endTime)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {block.justification && (
+                  <p
+                    className="text-sm mb-3 italic"
+                    style={{ color: 'var(--df-text-muted)' }}
+                  >
+                    "{block.justification}"
+                  </p>
+                )}
+
+                {/* Render Tasks within Block */}
+                {block.tasks && block.tasks.length > 0 && (
+                  <div className="mt-3 pl-3 border-l-2" style={{ borderColor: 'var(--df-border)' }}>
+                    <p className="text-xs uppercase font-bold mb-2" style={{ color: 'var(--df-text-muted)' }}>Tasks Included</p>
+                    <div className="space-y-3">
+                      {block.tasks.map((task: any, tIndex: number) => (
+                        <div key={tIndex} className="text-sm">
+                          <div className="flex items-start gap-2">
+                            <ArrowRight size={14} className="mt-1 shrink-0" style={{ color: 'var(--df-primary)' }} />
+                            <div>
+                              <p style={{ color: 'var(--df-text)' }} className="font-medium">
+                                Task ID: {task.id.slice(0, 8)}...
+                              </p>
+                              {task.logic && (
+                                <p style={{ color: 'var(--df-text-muted)' }}>
+                                  {task.logic}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </ScrollArea>
   );
 }

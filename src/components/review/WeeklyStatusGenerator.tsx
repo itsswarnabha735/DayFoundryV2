@@ -51,10 +51,10 @@ export function WeeklyStatusGenerator() {
     const dayOfWeek = now.getDay();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - dayOfWeek); // Sunday
-    
+
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
-    
+
     return {
       start: startOfWeek,
       end: endOfWeek,
@@ -64,55 +64,53 @@ export function WeeklyStatusGenerator() {
 
   const weekRange = getWeekRange();
 
-  // Mock function to gather weekly data (in real app, this would query DataStore)
+  // Gather weekly data from real data store
   const gatherWeeklyData = (): WeeklyData => {
-    // Mock data representing the week's activities
+    const tasks = data.tasks || [];
+    const events = data.events || [];
+
+    // Get completed tasks this week
+    const completedTasks = tasks.filter(t => t.completed);
+
+    // Map tasks to outcome format
+    const completedOutcomes = completedTasks.map(task => {
+      // Determine category based on tags
+      let category: 'work' | 'personal' | 'health' | 'learning' = 'work';
+      if (task.tags?.some(t => ['personal', 'home', 'family'].includes(t.toLowerCase()))) {
+        category = 'personal';
+      } else if (task.tags?.some(t => ['health', 'fitness', 'exercise'].includes(t.toLowerCase()))) {
+        category = 'health';
+      } else if (task.tags?.some(t => ['learning', 'course', 'study'].includes(t.toLowerCase()))) {
+        category = 'learning';
+      }
+
+      return {
+        title: task.title,
+        category,
+        completedDate: new Date().toISOString().split('T')[0],
+        keySteps: task.steps?.map(s => s.text) || []
+      };
+    });
+
+    // Calculate stats
+    const totalTasks = tasks.length;
+    const completedCount = completedTasks.length;
+
+    // Estimate focus hours from completed tasks' estimated time
+    const focusMinutes = completedTasks.reduce((sum, t) => sum + (t.est_most || 30), 0);
+    const focusHours = Math.round(focusMinutes / 60 * 10) / 10;
+
+    // Count events as meetings
+    const meetingsCount = events.length;
+
     return {
-      completedOutcomes: [
-        {
-          title: 'Complete Q4 roadmap review',
-          category: 'work',
-          completedDate: '2024-01-15',
-          keySteps: ['Stakeholder interviews', 'Priority scoring', 'Resource planning']
-        },
-        {
-          title: 'Launch product feature beta',
-          category: 'work', 
-          completedDate: '2024-01-16',
-          keySteps: ['QA testing', 'Documentation update', 'Beta user onboarding']
-        },
-        {
-          title: 'Complete home office setup',
-          category: 'personal',
-          completedDate: '2024-01-14',
-          keySteps: ['Desk assembly', 'Cable management', 'Lighting optimization']
-        },
-        {
-          title: 'Finish online course module',
-          category: 'learning',
-          completedDate: '2024-01-17',
-          keySteps: ['Watch lectures', 'Complete assignments', 'Submit project']
-        }
-      ],
-      reflections: [
-        {
-          date: '2024-01-15',
-          wins: 'Great stakeholder alignment on Q4 priorities',
-          blockers: 'Resource constraints for development team',
-          improvements: 'Schedule more buffer time between meetings'
-        },
-        {
-          date: '2024-01-16', 
-          wins: 'Beta launch went smoothly, positive user feedback',
-          blockers: 'Minor UI issues discovered post-launch',
-          improvements: 'Implement more thorough pre-launch testing'
-        }
-      ],
+      completedOutcomes,
+      reflections: [], // Will be populated when we fetch from reflections table in future
       stats: {
-        totalOutcomes: 6,
-        completedOutcomes: 4,
-        focusHours: 18.5,
-        meetingsCount: 12
+        totalOutcomes: totalTasks,
+        completedOutcomes: completedCount,
+        focusHours,
+        meetingsCount
       }
     };
   };
@@ -125,21 +123,21 @@ export function WeeklyStatusGenerator() {
 
   const handleGenerateUpdates = async () => {
     if (!weeklyData) return;
-    
+
     setIsGenerating(true);
-    
+
     try {
       // Call edge function to generate updates
       const result = await generateWeeklyStatus(weeklyData);
-      
+
       const updates = {
         work: result.workUpdate,
         personal: result.personalUpdate
       };
-      
+
       setGeneratedUpdates(updates);
       setEditableUpdates(updates);
-      
+
       toast.success('Weekly status updates generated!');
     } catch (error) {
       console.error('Error generating updates:', error);
@@ -155,7 +153,7 @@ export function WeeklyStatusGenerator() {
     try {
       await navigator.clipboard.writeText(content);
       toast.success(`${type === 'work' ? 'Work' : 'Personal'} update copied to clipboard!`);
-      
+
       // Haptic feedback if available
       if ('vibrate' in navigator) {
         navigator.vibrate([50]);
@@ -203,7 +201,7 @@ export function WeeklyStatusGenerator() {
     <section className="mb-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 
+          <h2
             style={{
               fontSize: 'var(--df-type-subtitle-size)',
               fontWeight: 'var(--df-type-subtitle-weight)',
@@ -212,7 +210,7 @@ export function WeeklyStatusGenerator() {
           >
             Weekly Status
           </h2>
-          <p 
+          <p
             style={{
               fontSize: 'var(--df-type-caption-size)',
               color: 'var(--df-text-muted)'
@@ -221,7 +219,7 @@ export function WeeklyStatusGenerator() {
             {weekRange.label}
           </p>
         </div>
-        
+
         {!generatedUpdates && (
           <Button
             onClick={handleGenerateUpdates}
@@ -246,7 +244,7 @@ export function WeeklyStatusGenerator() {
       </div>
 
       {/* Weekly Summary Card */}
-      <Card 
+      <Card
         className="p-4 mb-4"
         style={{
           backgroundColor: 'var(--df-surface-alt)',
@@ -255,7 +253,7 @@ export function WeeklyStatusGenerator() {
           boxShadow: 'var(--df-shadow-sm)'
         }}
       >
-        <h3 
+        <h3
           className="mb-3"
           style={{
             fontSize: 'var(--df-type-body-size)',
@@ -265,10 +263,10 @@ export function WeeklyStatusGenerator() {
         >
           Week Summary
         </h3>
-        
+
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <div 
+            <div
               style={{
                 fontSize: 'var(--df-type-title-size)',
                 fontWeight: 'var(--df-type-title-weight)',
@@ -277,7 +275,7 @@ export function WeeklyStatusGenerator() {
             >
               {weeklyData.stats.completedOutcomes}/{weeklyData.stats.totalOutcomes}
             </div>
-            <div 
+            <div
               style={{
                 fontSize: 'var(--df-type-caption-size)',
                 color: 'var(--df-text-muted)'
@@ -286,9 +284,9 @@ export function WeeklyStatusGenerator() {
               Outcomes
             </div>
           </div>
-          
+
           <div>
-            <div 
+            <div
               style={{
                 fontSize: 'var(--df-type-title-size)',
                 fontWeight: 'var(--df-type-title-weight)',
@@ -297,7 +295,7 @@ export function WeeklyStatusGenerator() {
             >
               {weeklyData.stats.focusHours}h
             </div>
-            <div 
+            <div
               style={{
                 fontSize: 'var(--df-type-caption-size)',
                 color: 'var(--df-text-muted)'
@@ -310,7 +308,7 @@ export function WeeklyStatusGenerator() {
 
         {/* Completed Outcomes */}
         <div className="space-y-2">
-          <h4 
+          <h4
             style={{
               fontSize: 'var(--df-type-caption-size)',
               fontWeight: 'var(--df-type-caption-weight)',
@@ -323,13 +321,13 @@ export function WeeklyStatusGenerator() {
           </h4>
           {weeklyData.completedOutcomes.map((outcome, index) => (
             <div key={index} className="flex items-center gap-3">
-              <div 
+              <div
                 className="flex items-center gap-1"
                 style={{ color: getCategoryColor(outcome.category) }}
               >
                 {getCategoryIcon(outcome.category)}
               </div>
-              <span 
+              <span
                 className="flex-1"
                 style={{
                   fontSize: 'var(--df-type-caption-size)',
@@ -338,7 +336,7 @@ export function WeeklyStatusGenerator() {
               >
                 {outcome.title}
               </span>
-              <Badge 
+              <Badge
                 variant="outline"
                 style={{
                   borderColor: getCategoryColor(outcome.category),
@@ -358,7 +356,7 @@ export function WeeklyStatusGenerator() {
       {generatedUpdates && (
         <>
           {/* Tab Selector */}
-          <div 
+          <div
             className="flex rounded-lg p-1 mb-4"
             style={{
               backgroundColor: 'var(--df-surface-alt)',
@@ -398,7 +396,7 @@ export function WeeklyStatusGenerator() {
           </div>
 
           {/* Update Editor */}
-          <Card 
+          <Card
             className="p-4"
             style={{
               backgroundColor: 'var(--df-surface)',
@@ -410,7 +408,7 @@ export function WeeklyStatusGenerator() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Edit3 size={16} style={{ color: 'var(--df-primary)' }} />
-                <h4 
+                <h4
                   style={{
                     fontSize: 'var(--df-type-body-size)',
                     fontWeight: 'var(--df-type-body-weight)',
@@ -420,7 +418,7 @@ export function WeeklyStatusGenerator() {
                   {activeTab === 'work' ? 'Work Update' : 'Personal Update'}
                 </h4>
               </div>
-              
+
               <Button
                 variant="outline"
                 size="sm"
@@ -436,7 +434,7 @@ export function WeeklyStatusGenerator() {
                 Copy
               </Button>
             </div>
-            
+
             <Textarea
               value={editableUpdates[activeTab]}
               onChange={(e) => setEditableUpdates(prev => ({
@@ -454,11 +452,11 @@ export function WeeklyStatusGenerator() {
               }}
               placeholder={`Edit your ${activeTab} update...`}
             />
-            
-            <Alert 
+
+            <Alert
               className="mt-3"
-              style={{ 
-                borderColor: 'var(--df-primary)', 
+              style={{
+                borderColor: 'var(--df-primary)',
                 backgroundColor: 'rgba(37, 99, 235, 0.1)'
               }}
             >

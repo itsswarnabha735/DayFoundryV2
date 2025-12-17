@@ -14,6 +14,7 @@ import { OAuthCallback } from './components/auth/OAuthCallback';
 import { DataStoreProvider } from './contexts/DataStoreContext';
 import { globalErrorHandler } from './utils/error-handler';
 import { authManager, User } from './utils/auth';
+import { Toaster } from './components/ui/sonner';
 
 type Tab = 'today' | 'inbox' | 'schedule' | 'focus' | 'review';
 
@@ -28,6 +29,12 @@ function AppContent() {
   const focusScreenRef = useRef<FocusScreenRef>(null);
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
+      // Check localStorage first
+      const storedTheme = localStorage.getItem('df-theme');
+      if (storedTheme) {
+        return storedTheme === 'dark';
+      }
+      // Fallback to system preference
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     return false;
@@ -40,8 +47,10 @@ function AppContent() {
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('df-theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('df-theme', 'light');
     }
   }, [isDark]);
 
@@ -309,7 +318,7 @@ function AppContent() {
   const renderScreen = () => {
     switch (activeTab) {
       case 'today':
-        return <TodayScreen ref={todayScreenRef} isDark={isDark} toggleTheme={toggleTheme} />;
+        return <TodayScreen ref={todayScreenRef} isDark={isDark} toggleTheme={toggleTheme} onNavigate={setActiveTab} />;
       case 'inbox':
         return <InboxScreen ref={inboxScreenRef} />;
       case 'schedule':
@@ -319,7 +328,7 @@ function AppContent() {
       case 'review':
         return <ReviewScreen />;
       default:
-        return <TodayScreen ref={todayScreenRef} isDark={isDark} toggleTheme={toggleTheme} />;
+        return <TodayScreen ref={todayScreenRef} isDark={isDark} toggleTheme={toggleTheme} onNavigate={setActiveTab} />;
     }
   };
 
@@ -462,6 +471,7 @@ export default function App() {
         });
       }}
     >
+      <Toaster position="top-center" richColors />
       <AppContent />
     </ErrorBoundary>
   );

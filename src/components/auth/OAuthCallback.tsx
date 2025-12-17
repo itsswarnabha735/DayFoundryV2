@@ -40,29 +40,30 @@ export function OAuthCallback() {
             const toastId = toast.loading('Connecting Google Calendar...');
 
             try {
-                console.log('OAuthCallback: Getting auth session...');
-                const session = await authManager.getSession();
-                console.log('OAuthCallback: Got session:', { hasSession: !!session, hasAccessToken: !!session?.access_token });
-
-                // Get current user from Supabase
-                console.log('OAuthCallback: Getting current user...');
-                const { data: { user }, error: userError } = await supabase.auth.getUser();
-                console.log('OAuthCallback: User result:', { hasUser: !!user, error: userError?.message });
-
-                if (userError || !user) {
-                    throw new Error('User not authenticated');
+                // Ensure session is fresh
+                const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+                if (sessionError || !session) {
+                    console.error('OAuthCallback: Failed to refresh session:', sessionError);
+                    throw new Error('User not authenticated (session refresh failed)');
                 }
+
+                console.log('--- DEBUG: OAuth Callback Connection ---');
+                console.log('Project ID:', projectId);
+                console.log('Anon Key:', publicAnonKey ? `${publicAnonKey.substring(0, 10)}...` : 'UNDEFINED');
+                console.log('Token:', session.access_token ? `${session.access_token.substring(0, 10)}...` : 'UNDEFINED');
+                console.log('User ID:', session.user.id);
 
                 console.log('OAuthCallback: Making POST request to Edge Function...');
                 const response = await fetch(`https://${projectId}.supabase.co/functions/v1/calendar-auth/callback`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${session?.access_token || publicAnonKey}`
+                        'Authorization': `Bearer ${session.access_token}`,
+                        'apikey': publicAnonKey
                     },
                     body: JSON.stringify({
                         code,
-                        user_id: user.id
+                        user_id: session.user.id
                     })
                 });
 

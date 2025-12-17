@@ -1,0 +1,805 @@
+{
+    "metadata": {
+        "description": "30+ Test Cases for Negotiator Agent (Conflict Resolution Strategies)",
+        "version": "1.0.0",
+        "created": "2025-12-16",
+        "agent": "negotiate-schedule",
+        "evaluation_criteria": [
+            "Strategy Validity (Tetris Logic)",
+            "Feasibility (Time/Duration fit)",
+            "Variety (3 distinct options)",
+            "Preference Adherence"
+        ]
+    },
+    "testCases": [
+        {
+            "id": "N001",
+            "name": "Simple Move - 1 Perfect Slot",
+            "description": "One 60m conflict, one 60m free slot available later.",
+            "input": {
+                "alert": {
+                    "message": "Conflict with Deep Work"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Deep Work",
+                        "start": "10:00",
+                        "end": "11:00",
+                        "durationMin": 60
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "14:00",
+                        "end": "15:00",
+                        "durationMin": 60
+                    }
+                ],
+                "user_preferences": {
+                    "conflict_resolution_style": "balanced"
+                }
+            },
+            "expected": {
+                "strategies_count": 3,
+                "must_contain_action": "move",
+                "move_target_start": "14:00"
+            }
+        },
+        {
+            "id": "N002",
+            "name": "Simple Move - Morning Slot",
+            "description": "Conflict in afternoon, free slot in morning.",
+            "input": {
+                "alert": {
+                    "message": "Conflict with Review"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Review",
+                        "start": "15:00",
+                        "end": "16:00",
+                        "durationMin": 60
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "09:00",
+                        "end": "10:00",
+                        "durationMin": 60
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "must_contain_action": "move",
+                "move_target_start": "09:00"
+            }
+        },
+        {
+            "id": "N003",
+            "name": "Squeeze - Slight Resize",
+            "description": "60m block, only 45m slot available. Should suggest shortening.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Admin",
+                        "start": "10:00",
+                        "end": "11:00",
+                        "durationMin": 60
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "14:00",
+                        "end": "14:45",
+                        "durationMin": 45
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "must_contain_action": "shorten",
+                "target_duration": 45
+            }
+        },
+        {
+            "id": "N004",
+            "name": "Squeeze - Invalid (Deep Work)",
+            "description": "60m Deep Work block, only 15m slot. Should NOT suggest shortening to 15m.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Deep Coding",
+                        "start": "10:00",
+                        "end": "11:00",
+                        "durationMin": 60
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "14:00",
+                        "end": "14:15",
+                        "durationMin": 15
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "avoid_action": "shorten",
+                "expected_action": "delete"
+            }
+        },
+        {
+            "id": "N005",
+            "name": "Multi-Slot Luxury",
+            "description": "3 different slots available. Strategies should offer variety.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Task",
+                        "start": "10:00",
+                        "end": "11:00",
+                        "durationMin": 60
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "13:00",
+                        "end": "14:00",
+                        "durationMin": 60
+                    },
+                    {
+                        "start": "15:00",
+                        "end": "16:00",
+                        "durationMin": 60
+                    },
+                    {
+                        "start": "17:00",
+                        "end": "18:00",
+                        "durationMin": 60
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "diverse_start_times": true
+            }
+        },
+        {
+            "id": "N006",
+            "name": "Hard Choice - No Slots",
+            "description": "No free slots at all.",
+            "input": {
+                "alert": {
+                    "message": "Gridlock"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Meeting",
+                        "start": "10:00",
+                        "end": "11:00",
+                        "durationMin": 60
+                    }
+                ],
+                "free_slots": [],
+                "user_preferences": {}
+            },
+            "expected": {
+                "strategies": [
+                    "delete",
+                    "reschedule_tomorrow",
+                    "shorten_drastically"
+                ]
+            }
+        },
+        {
+            "id": "N007",
+            "name": "Tight Fit - Exact Match",
+            "description": "30m task, 30m slot. Perfect move.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Call",
+                        "start": "10:00",
+                        "end": "10:30",
+                        "durationMin": 30
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "11:30",
+                        "end": "12:00",
+                        "durationMin": 30
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "success": true,
+                "move_target_start": "11:30"
+            }
+        },
+        {
+            "id": "N008",
+            "name": "Impossible Fit - Task Too Big",
+            "description": "120m task, largest slot is 30m.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Deep Work",
+                        "start": "09:00",
+                        "end": "11:00",
+                        "durationMin": 120
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "13:00",
+                        "end": "13:30",
+                        "durationMin": 30
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "avoid_action": "move",
+                "suggest_split": true
+            }
+        },
+        {
+            "id": "N009",
+            "name": "Strategy - Split",
+            "description": "Suggest splitting a large task into two smaller slots.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Writing",
+                        "start": "09:00",
+                        "end": "11:00",
+                        "durationMin": 120
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "13:00",
+                        "end": "14:00",
+                        "durationMin": 60
+                    },
+                    {
+                        "start": "15:00",
+                        "end": "16:00",
+                        "durationMin": 60
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "action": "split"
+            }
+        },
+        {
+            "id": "N010",
+            "name": "Priority - Aggressive Style",
+            "description": "User prefers 'Aggressive' resolution (Delete low priority).",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Admin",
+                        "start": "10:00",
+                        "end": "10:30",
+                        "durationMin": 30
+                    }
+                ],
+                "free_slots": [],
+                "user_preferences": {
+                    "conflict_resolution_style": "aggressive"
+                }
+            },
+            "expected": {
+                "primary_strategy": "delete"
+            }
+        },
+        {
+            "id": "N011",
+            "name": "Priority - Conservative Style",
+            "description": "User prefers 'Conservative' resolution (Try to keep everything).",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Admin",
+                        "start": "10:00",
+                        "end": "10:30",
+                        "durationMin": 30
+                    }
+                ],
+                "free_slots": [],
+                "user_preferences": {
+                    "conflict_resolution_style": "conservative"
+                }
+            },
+            "expected": {
+                "primary_strategy": "reschedule_tomorrow"
+            }
+        },
+        {
+            "id": "N012",
+            "name": "Multiple Conflicts - Batch Move",
+            "description": "Two conflicting blocks, one large slot available.",
+            "input": {
+                "alert": {
+                    "message": "Double Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "b1",
+                        "title": "Task A",
+                        "start": "10:00",
+                        "end": "10:30",
+                        "durationMin": 30
+                    },
+                    {
+                        "id": "b2",
+                        "title": "Task B",
+                        "start": "10:30",
+                        "end": "11:00",
+                        "durationMin": 30
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "13:00",
+                        "end": "14:00",
+                        "durationMin": 60
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "action": "move_both"
+            }
+        },
+        {
+            "id": "N013",
+            "name": "Swapping - (Simulated)",
+            "description": "No free slots, implies a need to swap (agent might fallback to delete/tomorrow).",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "title": "High Priority",
+                        "start": "10:00",
+                        "end": "11:00"
+                    }
+                ],
+                "free_slots": [],
+                "user_preferences": {}
+            },
+            "expected": {
+                "strategy_contains": "Tomorrow"
+            }
+        },
+        {
+            "id": "N014",
+            "name": "Context - Lunch Time",
+            "description": "Free slot is at 12:00 (Lunch). Agent should be hesitant or label it.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "title": "Meeting",
+                        "start": "10:00",
+                        "end": "11:00"
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "12:00",
+                        "end": "13:00",
+                        "durationMin": 60
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "valid_option": true,
+                "note": "Lunch overlap accepted if no other choice"
+            }
+        },
+        {
+            "id": "N015",
+            "name": "Context - Late Night",
+            "description": "Free slot at 22:00. Agent should avoid unless desperate.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "title": "Work",
+                        "start": "10:00",
+                        "end": "11:00"
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "22:00",
+                        "end": "23:00",
+                        "durationMin": 60
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "impact": "High",
+                "description_mentions": "Late"
+            }
+        },
+        {
+            "id": "N016",
+            "name": "Formatting - ID Check",
+            "description": "Ensure strategy contains valid Block IDs in operations.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "id": "uuid-123",
+                        "title": "Test",
+                        "start": "10:00",
+                        "end": "10:30"
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "11:00",
+                        "end": "11:30"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "operation_targetId": "uuid-123"
+            }
+        },
+        {
+            "id": "N017",
+            "name": "Formatting - Time Check",
+            "description": "Ensure new times are valid formats.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "title": "Test",
+                        "start": "10:00",
+                        "end": "10:30"
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "11:00",
+                        "end": "11:30"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "valid_time_format": true
+            }
+        },
+        {
+            "id": "N018",
+            "name": "Scenario - Delete Admin",
+            "description": "Conflict with admin task, suggestion to just delete it.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "title": "Clear Spam",
+                        "type": "admin",
+                        "start": "09:00",
+                        "end": "09:15"
+                    }
+                ],
+                "free_slots": [],
+                "user_preferences": {}
+            },
+            "expected": {
+                "strategy_type": "delete"
+            }
+        },
+        {
+            "id": "N019",
+            "name": "Scenario - Reschedule Deep Work",
+            "description": "Conflict with Deep Work, strongly prefer Move over Delete.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "title": "Coding",
+                        "type": "deep",
+                        "start": "09:00",
+                        "end": "11:00"
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "14:00",
+                        "end": "16:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "best_strategy": "move",
+                "avoid": "delete"
+            }
+        },
+        {
+            "id": "N020",
+            "name": "Feasibility - Adjacent Slots",
+            "description": "Two 30m slots adjacent (10:00-10:30, 10:30-11:00) vs one 60m task.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "title": "Big Task",
+                        "durationMin": 60
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "10:00",
+                        "end": "10:30"
+                    },
+                    {
+                        "start": "10:30",
+                        "end": "11:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "can_combine_slots": true
+            }
+        },
+        {
+            "id": "N021",
+            "name": "Strategy Count",
+            "description": "Must return exactly 3 strategies.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "title": "A"
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "10:00",
+                        "end": "11:00"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "count": 3
+            }
+        },
+        {
+            "id": "N022",
+            "name": "Impact Labeling",
+            "description": "Check if 'High' impact is correctly assigned to 'Delete Deep Work'.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "title": "Deep Work",
+                        "type": "deep"
+                    }
+                ],
+                "free_slots": [],
+                "user_preferences": {}
+            },
+            "expected": {
+                "strategy_delete_impact": "High"
+            }
+        },
+        {
+            "id": "N023",
+            "name": "Impact Labeling - Low",
+            "description": "Check if 'Low' impact is assigned to 'Move Admin 15 mins'.",
+            "input": {
+                "alert": {
+                    "message": "Conflict"
+                },
+                "conflicting_blocks": [
+                    {
+                        "title": "Email",
+                        "type": "admin"
+                    }
+                ],
+                "free_slots": [
+                    {
+                        "start": "10:15",
+                        "end": "10:30"
+                    }
+                ],
+                "user_preferences": {}
+            },
+            "expected": {
+                "strategy_move_impact": "Low"
+            }
+        },
+        {
+            "id": "N024",
+            "name": "Model - Pro Thinking",
+            "description": "Verify Pro model usage if preference set.",
+            "input": {
+                "user_preferences": {
+                    "ai_preferences": {
+                        "model": "pro"
+                    }
+                }
+            },
+            "expected": {
+                "model": "gemini-3.0-pro"
+            }
+        },
+        {
+            "id": "N025",
+            "name": "Model - Standard Speed",
+            "description": "Verify Standard model usage.",
+            "input": {
+                "user_preferences": {
+                    "ai_preferences": {
+                        "model": "standard"
+                    }
+                }
+            },
+            "expected": {
+                "model": "gemini-2.0-flash"
+            }
+        },
+        {
+            "id": "N026",
+            "name": "Timezone Handling",
+            "description": "Output times should respect user timezone (e.g. not UTC).",
+            "input": {
+                "timezone": "Asia/Kolkata",
+                "free_slots": [
+                    {
+                        "start": "2025-12-16T09:00:00Z",
+                        "end": "2025-12-16T10:00:00Z"
+                    }
+                ]
+            },
+            "expected": {
+                "output_time_format": "2:30 PM"
+            }
+        },
+        {
+            "id": "N027",
+            "name": "Broken Block handling",
+            "description": "Block with missing start/end times.",
+            "input": {
+                "conflicting_blocks": [
+                    {
+                        "title": "Ghost",
+                        "start": null
+                    }
+                ]
+            },
+            "expected": {
+                "graceful_failure": true
+            }
+        },
+        {
+            "id": "N028",
+            "name": "Zero Duration Conflict",
+            "description": "Conflict with 0-min block (bug?), handle gracefully.",
+            "input": {
+                "conflicting_blocks": [
+                    {
+                        "title": "Bug",
+                        "durationMin": 0
+                    }
+                ]
+            },
+            "expected": {
+                "strategy": "delete"
+            }
+        },
+        {
+            "id": "N029",
+            "name": "Massive Conflict List",
+            "description": "10 conflicting blocks. Strategies should be batched.",
+            "input": {
+                "conflicting_blocks": [
+                    {},
+                    {},
+                    {},
+                    {},
+                    {},
+                    {},
+                    {},
+                    {},
+                    {},
+                    {}
+                ],
+                "free_slots": []
+            },
+            "expected": {
+                "strategy_summary": "Clear all for event"
+            }
+        },
+        {
+            "id": "N030",
+            "name": "The Perfect Switch",
+            "description": "Conflict with Block A (High Priority), Slot used by Block B (Low Priority). Suggest swapping? (Advanced)",
+            "input": {
+                "conflicting_blocks": [
+                    {
+                        "title": "High Prio",
+                        "type": "deep"
+                    }
+                ],
+                "free_slots": []
+            },
+            "expected": {
+                "strategy": "reschedule_tomorrow"
+            }
+        }
+    ]
+}

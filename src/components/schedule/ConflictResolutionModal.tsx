@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Clock, Focus, Calendar, ArrowRight, Copy, Check, Zap, Target } from 'lucide-react';
+import { X, Clock, Focus, Calendar, ArrowRight, Copy, Check, Zap, Target, Minimize2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -32,14 +32,16 @@ interface ConflictDetection {
   estimatedDelay: number; // minutes
 }
 
-interface StrategyOperation {
+export interface StrategyOperation {
   type: 'move' | 'resize' | 'delete' | 'split';
   targetBlockId: string;
+  targetBlockTitle?: string;
+  originalStart?: string;
+  originalEnd?: string;
   params?: {
-    newStart?: string;
-    newEnd?: string;
     shiftMinutes?: number;
     durationMinutes?: number;
+    splitDuration?: number;
   };
 }
 
@@ -53,6 +55,7 @@ interface ReplanStrategy {
   tradeoffs: string[];
   action?: string;
   operations?: StrategyOperation[];
+  raw?: any; // For storing original agent response
 }
 
 interface ScheduleChange {
@@ -90,7 +93,28 @@ export function ConflictResolutionModal({
   const [rescheduleMessage, setRescheduleMessage] = useState<string>('');
   const [messageCopied, setMessageCopied] = useState(false);
   const [savePreferences, setSavePreferences] = useState(false);
+  const [alertDetails, setAlertDetails] = useState<{ type: string; message: string } | null>(null);
   const { callEdgeFunction } = useEdgeFunctions();
+
+  // Fetch alert details when triggered from an alert
+  useEffect(() => {
+    if (isOpen && alertId) {
+      const fetchAlertDetails = async () => {
+        const { data: alert, error } = await supabase
+          .from('schedule_alerts')
+          .select('type, message')
+          .eq('id', alertId)
+          .single();
+
+        if (!error && alert) {
+          setAlertDetails(alert);
+        }
+      };
+      fetchAlertDetails();
+    } else {
+      setAlertDetails(null);
+    }
+  }, [isOpen, alertId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -102,6 +126,7 @@ export function ConflictResolutionModal({
       }
     }
   }, [isOpen, conflicts, alertId]);
+
 
   const fetchUserPreferences = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -116,6 +141,43 @@ export function ConflictResolutionModal({
     }
   };
 
+  const getActionColor = (type: string) => {
+    switch (type) {
+      case 'moved': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      case 'resized': return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+      case 'removed': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+    }
+  };
+
+  const getTimeDelta = (change: ScheduleChange) => {
+    // Helper to convert HH:MM time string to minutes
+    const toMinutes = (timeStr: string): number => {
+      if (!timeStr) return NaN;
+      const parts = timeStr.split(':');
+      if (parts.length !== 2) return NaN;
+      const [hours, minutes] = parts.map(Number);
+      if (isNaN(hours) || isNaN(minutes)) return NaN;
+      return hours * 60 + minutes;
+    };
+
+    if (change.type === 'moved' && change.oldStartTime && change.newStartTime) {
+      const oldMins = toMinutes(change.oldStartTime);
+      const newMins = toMinutes(change.newStartTime);
+      if (isNaN(oldMins) || isNaN(newMins)) return '';
+      const diff = newMins - oldMins;
+      return diff > 0 ? `Delayed by ${diff}m` : `Advanced by ${Math.abs(diff)}m`;
+    }
+    if (change.type === 'resized' && change.oldEndTime && change.newEndTime && change.oldStartTime && change.newStartTime) {
+      const oldDuration = toMinutes(change.oldEndTime) - toMinutes(change.oldStartTime);
+      const newDuration = toMinutes(change.newEndTime) - toMinutes(change.newStartTime);
+      if (isNaN(oldDuration) || isNaN(newDuration)) return '';
+      const diff = newDuration - oldDuration;
+      return diff > 0 ? `Extended by ${diff}m` : `Shortened by ${Math.abs(diff)}m`;
+    }
+    return '';
+  };
+
   const fetchAgentStrategies = async (id: string) => {
     setIsLoadingStrategies(true);
     try {
@@ -125,19 +187,21 @@ export function ConflictResolutionModal({
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
       });
 
-      if (response.success && response.data.strategies) {
-        const agentStrategies: ReplanStrategy[] = response.data.strategies.map((s: any) => {
+      if (response.success && response.strategies) {
+        const agentStrategies: ReplanStrategy[] = response.strategies.map((s: any) => {
           const { changes, newBlocks } = applyOperations(currentBlocks, s.operations || []);
           return {
             id: s.id,
             title: s.title,
             description: s.description,
-            icon: s.action === 'delete' ? X : (s.action === 'move' ? ArrowRight : Zap),
-            changes: changes,
-            newBlocks: newBlocks,
-            tradeoffs: [s.impact],
-            action: s.action,
-            operations: s.operations
+            icon: s.action === 'delete' ? X : (s.action === 'move' ? ArrowRight : (s.action === 'shorten' ? Minimize2 : Clock)),
+            impact: s.impact?.toLowerCase() as 'high' | 'medium' | 'low',
+            changes,
+            newBlocks,
+            tradeoffs: s.tradeoffs || [s.description || 'AI-generated strategy'],
+            operations: s.operations || [],
+            // Store raw strategy data for recording later
+            raw: s
           };
         });
         setStrategies(agentStrategies);
@@ -156,9 +220,80 @@ export function ConflictResolutionModal({
     let newBlocks = [...blocks];
     const changes: ScheduleChange[] = [];
 
+    console.log('applyOperations: Starting', {
+      blockCount: blocks.length,
+      operationCount: operations.length,
+      blockTitles: blocks.map(b => b.title),
+      ops: operations
+    });
+
     for (const op of operations) {
-      const blockIndex = newBlocks.findIndex(b => b.title === op.targetBlockId || b.id === op.targetBlockId);
-      if (blockIndex === -1) continue;
+      // Enhanced matching: Try ID first, then exact title, then fuzzy title match
+      let blockIndex = newBlocks.findIndex(b => b.id === op.targetBlockId);
+      if (blockIndex === -1) {
+        blockIndex = newBlocks.findIndex(b => b.title === op.targetBlockId);
+      }
+      if (blockIndex === -1 && op.targetBlockId) {
+        // Fuzzy match: check if block title contains targetBlockId or vice versa
+        const targetLower = op.targetBlockId.toLowerCase();
+        blockIndex = newBlocks.findIndex(b =>
+          b.title.toLowerCase().includes(targetLower) ||
+          targetLower.includes(b.title.toLowerCase())
+        );
+      }
+
+      console.log('applyOperations: Matching op', { op, foundIndex: blockIndex, target: op.targetBlockId });
+
+      if (blockIndex === -1) {
+        // Use title from operation if available, or truncated ID
+        const displayTitle = op.targetBlockTitle || (op.targetBlockId.length > 30 ? `Task (${op.targetBlockId.substring(0, 8)}...)` : op.targetBlockId);
+
+        let oldStart = '';
+        let oldEnd = '';
+        let newStart = '';
+        let newEnd = '';
+        let reason = `${op.type}: Block not found in current view`;
+
+        // If the agent provided original times, usage them to simulate the change
+        if (op.originalStart) {
+          // Construct ISO strings assuming today's date for display purposes
+          const today = new Date().toISOString().split('T')[0];
+          oldStart = `${today}T${op.originalStart}:00`;
+
+          if (op.originalEnd) {
+            oldEnd = `${today}T${op.originalEnd}:00`;
+          }
+
+          // Calculate new times if possible
+          if (op.type === 'move' && op.params?.shiftMinutes) {
+            newStart = addMinutes(oldStart, op.params.shiftMinutes);
+            if (oldEnd) newEnd = addMinutes(oldEnd, op.params.shiftMinutes);
+            reason = `Move ${Math.abs(op.params.shiftMinutes)}m ${op.params.shiftMinutes > 0 ? 'later' : 'earlier'}`;
+          } else if (op.type === 'resize' && op.params?.durationMinutes) {
+            newStart = oldStart;
+            newEnd = addMinutes(oldStart, op.params.durationMinutes);
+            reason = `Resize to ${op.params.durationMinutes}m`;
+          }
+        } else {
+          // Fallback reason if we don't have times
+          if (op.type === 'move' && op.params?.shiftMinutes) {
+            const shift = op.params.shiftMinutes;
+            reason = `Move by ${Math.abs(shift)}m ${shift > 0 ? 'later' : 'earlier'}`;
+          }
+        }
+
+        changes.push({
+          type: 'pending' as any,
+          blockId: op.targetBlockId,
+          blockTitle: displayTitle,
+          oldStartTime: oldStart,
+          oldEndTime: oldEnd,
+          newStartTime: newStart,
+          newEndTime: newEnd,
+          reason: reason
+        });
+        continue;
+      }
 
       const block = newBlocks[blockIndex];
 
@@ -204,8 +339,17 @@ export function ConflictResolutionModal({
         });
 
         newBlocks.splice(blockIndex, 1);
+      } else {
+        // Handle unknown operation types (e.g., 'reschedule', 'defer') as informational changes
+        changes.push({
+          type: 'pending' as any,
+          blockId: block.id,
+          blockTitle: block.title,
+          oldStartTime: block.startTime,
+          oldEndTime: block.endTime,
+          reason: `${op.type}: Will be rescheduled`
+        });
       }
-      // TODO: Implement split logic if needed
     }
 
     return { changes, newBlocks };
@@ -214,8 +358,59 @@ export function ConflictResolutionModal({
   const generateStrategies = () => {
     const protectFocusStrategy = generateProtectFocusStrategy();
     const hitDeadlinesStrategy = generateHitDeadlinesStrategy();
+    const rescheduleLaterStrategy = generateRescheduleLaterStrategy();
 
-    setStrategies([protectFocusStrategy, hitDeadlinesStrategy]);
+    setStrategies([protectFocusStrategy, hitDeadlinesStrategy, rescheduleLaterStrategy]);
+  };
+
+  const generateRescheduleLaterStrategy = (): ReplanStrategy => {
+    const operations: StrategyOperation[] = [];
+    const processedBlockIds = new Set<string>();
+
+    // For each conflict, move the lower-priority block to end of day or mark for tomorrow
+    conflicts.forEach(conflict => {
+      const sortedBlocks = [...(conflict.affectedBlocks || [])].sort((a, b) => {
+        const priorityScore = { high: 3, medium: 2, low: 1 };
+        const typeScore = { deep: 3, meeting: 2, admin: 1, errand: 0, buffer: 0, 'micro-break': 0, calendar: 2, travel: 1 };
+        const scoreA = (a?.priority ? priorityScore[a.priority] : 0) * 10 + (typeScore[a?.type] || 0);
+        const scoreB = (b?.priority ? priorityScore[b.priority] : 0) * 10 + (typeScore[b?.type] || 0);
+        return scoreB - scoreA;
+      });
+
+      // Move the lowest priority block to late afternoon (4 PM onwards)
+      const blockToReschedule = sortedBlocks[sortedBlocks.length - 1];
+      if (blockToReschedule && !processedBlockIds.has(blockToReschedule.id)) {
+        processedBlockIds.add(blockToReschedule.id);
+        const currentStartMinutes = timeToMinutes(blockToReschedule.startTime);
+        const targetStartMinutes = 17 * 60; // 5:00 PM
+        const shiftMinutes = targetStartMinutes - currentStartMinutes;
+
+        if (shiftMinutes > 0) {
+          operations.push({
+            type: 'move',
+            targetBlockId: blockToReschedule.id,
+            params: { shiftMinutes }
+          });
+        }
+      }
+    });
+
+    const { changes, newBlocks } = applyOperations(currentBlocks, operations);
+
+    return {
+      id: 'reschedule_later',
+      title: 'Reschedule Later',
+      description: 'Move conflicting tasks to later in the day or defer to tomorrow',
+      icon: Calendar,
+      changes,
+      newBlocks,
+      tradeoffs: [
+        'Some tasks moved to end of day',
+        'May extend working hours',
+        'Original priorities maintained'
+      ],
+      operations
+    };
   };
 
   const generateProtectFocusStrategy = (): ReplanStrategy => {
@@ -582,6 +777,41 @@ export function ConflictResolutionModal({
             </h3>
 
             <div className="space-y-2">
+              {/* Show alert details when triggered from Guardian */}
+              {alertDetails && conflicts.length === 0 && (
+                <div
+                  className="flex items-center gap-3 p-3 rounded"
+                  style={{
+                    backgroundColor: 'var(--df-surface-alt)',
+                    border: `1px solid var(--df-warning)`
+                  }}
+                >
+                  <Badge
+                    style={{
+                      backgroundColor: 'var(--df-warning)',
+                      color: 'var(--df-primary-contrast)',
+                      fontSize: 'var(--df-type-caption-size)'
+                    }}
+                  >
+                    {alertDetails.type.toUpperCase()}
+                  </Badge>
+
+                  <div className="flex-1">
+                    <p
+                      className="m-0"
+                      style={{
+                        fontSize: 'var(--df-type-body-size)',
+                        fontWeight: 'var(--df-type-body-weight)',
+                        color: 'var(--df-text)'
+                      }}
+                    >
+                      {alertDetails.message}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Show local conflicts */}
               {conflicts.map((conflict, index) => (
                 <div
                   key={index}
@@ -763,58 +993,101 @@ export function ConflictResolutionModal({
               >
                 <div className="space-y-3">
                   {strategies.find(s => s.id === selectedStrategy)?.changes.length === 0 ? (
-                    <p className="text-sm text-white/60 italic">No specific changes required for this strategy.</p>
+                    <div className="flex flex-col items-center justify-center py-6 text-center space-y-3">
+                      <div className="p-3 rounded-full bg-blue-50/10">
+                        <Calendar className="w-8 h-8 text-blue-400" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium" style={{ color: 'var(--df-text)' }}>
+                          {strategies.find(s => s.id === selectedStrategy)?.title}
+                        </p>
+                        <p className="text-sm px-4" style={{ color: 'var(--df-text-muted)' }}>
+                          {strategies.find(s => s.id === selectedStrategy)?.description || 'This strategy will be applied when you click Apply.'}
+                        </p>
+                      </div>
+                      {strategies.find(s => s.id === selectedStrategy)?.operations &&
+                        strategies.find(s => s.id === selectedStrategy)!.operations!.length > 0 && (
+                          <Badge variant="outline" className="mt-2 text-xs">
+                            {strategies.find(s => s.id === selectedStrategy)!.operations!.length} actions pending
+                          </Badge>
+                        )}
+                    </div>
                   ) : (
                     strategies.find(s => s.id === selectedStrategy)?.changes.slice(0, 5).map((change, index) => (
-                      <div key={index} className="flex items-center gap-3">
-                        <div
-                          className="flex-shrink-0 p-1 rounded"
-                          style={{ backgroundColor: 'var(--df-surface)' }}
-                        >
-                          {getChangeIcon(change.type)}
+                      <div
+                        key={index}
+                        className="p-3 rounded-lg space-y-3 transition-colors"
+                        style={{
+                          backgroundColor: 'var(--df-surface)',
+                          border: '1px solid var(--df-border)'
+                        }}
+                      >
+                        {/* Header: Title & Badge */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2" style={{ color: 'var(--df-text-muted)' }}>
+                            {getChangeIcon(change.type)}
+                            <span className="font-medium text-sm" style={{ color: 'var(--df-text)' }}>
+                              {change.blockTitle}
+                            </span>
+                          </div>
+                          <span className={`text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded ${getActionColor(change.type)}`}>
+                            {change.type}
+                          </span>
                         </div>
 
-                        <div className="flex-1 min-w-0">
-                          <p
-                            className="m-0 truncate"
-                            style={{
-                              fontSize: 'var(--df-type-caption-size)',
-                              fontWeight: 'var(--df-type-caption-weight)',
-                              color: 'var(--df-text)'
-                            }}
-                          >
-                            <span style={{ fontWeight: '600' }}>{change.blockTitle}</span>
-                          </p>
+                        {/* Content: Before -> After */}
+                        {change.type !== 'removed' && change.oldStartTime && change.newStartTime && (
+                          <div className="flex items-center justify-between text-sm px-1">
+                            {/* Before */}
+                            <div className="flex flex-col">
+                              <span className="text-xs uppercase" style={{ color: 'var(--df-text-muted)', opacity: 0.7 }}>Before</span>
+                              <span className="line-through" style={{ color: 'var(--df-text-muted)' }}>
+                                {formatTime(change.oldStartTime)} - {formatTime(change.oldEndTime || '')}
+                              </span>
+                            </div>
 
-                          <div className="flex items-center gap-2 mt-1">
-                            {change.oldStartTime && (
-                              <>
-                                <span
-                                  style={{
-                                    fontSize: 'var(--df-type-caption-size)',
-                                    fontWeight: 'var(--df-type-caption-weight)',
-                                    color: 'var(--df-text-muted)',
-                                    textDecoration: 'line-through'
-                                  }}
-                                >
-                                  {formatTime(change.oldStartTime)} - {formatTime(change.oldEndTime || '')}
-                                </span>
-                                <ArrowRight size={12} style={{ color: 'var(--df-text-muted)' }} />
-                              </>
-                            )}
-                            {change.newStartTime && (
+                            {/* Arrow */}
+                            <div className="px-2" style={{ color: 'var(--df-primary)' }}>
+                              <ArrowRight size={16} />
+                            </div>
+
+                            {/* After */}
+                            <div className="flex flex-col text-right">
+                              <span className="text-xs uppercase font-medium" style={{ color: 'var(--df-primary)' }}>After</span>
                               <span
+                                className="font-medium px-1.5 py-0.5 rounded -mr-1.5"
                                 style={{
-                                  fontSize: 'var(--df-type-caption-size)',
-                                  fontWeight: 'var(--df-type-caption-weight)',
-                                  color: 'var(--df-primary)'
+                                  color: 'var(--df-text)',
+                                  backgroundColor: 'rgba(37, 99, 235, 0.15)'
                                 }}
                               >
                                 {formatTime(change.newStartTime)} - {formatTime(change.newEndTime || '')}
                               </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Footer: Delta info */}
+                        {(getTimeDelta(change) || change.reason) && (
+                          <div
+                            className="flex items-center gap-1.5 pt-2 mt-1 text-xs"
+                            style={{
+                              borderTop: '1px solid var(--df-border)',
+                              color: 'var(--df-text-muted)'
+                            }}
+                          >
+                            <div
+                              className="w-1 h-1 rounded-full"
+                              style={{ backgroundColor: 'var(--df-primary)', opacity: 0.5 }}
+                            />
+                            <span>{change.reason}</span>
+                            {getTimeDelta(change) && (
+                              <span className="ml-auto font-mono text-xs" style={{ opacity: 0.7 }}>
+                                {getTimeDelta(change)}
+                              </span>
                             )}
                           </div>
-                        </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -980,8 +1253,19 @@ export function ConflictResolutionModal({
                   }
 
                   // Apply the strategy
-                  onApplyStrategy(strategy);
+                  onApplyStrategy(strategy); // Fix: use prop onApplyStrategy, not onApply
 
+                  // Fire-and-forget: Record the user's choice for agent learning
+                  callEdgeFunction('record-agent-decision', {
+                    user_id: (await import('../../utils/supabase/client').then((m) => m.supabase.auth.getUser())).data.user?.id,
+                    agent_name: 'negotiator',
+                    decision_type: 'conflict_resolution_chosen',
+                    context: { alert_id: alertId || 'manual', strategy_id: strategy.id }, // Fix: use alertId prop
+                    options_presented: strategies.map(s => s.raw || { id: s.id, title: s.title }),
+                    option_chosen: strategy.id
+                  }).catch(err => console.error('Failed to record decision:', err));
+
+                  onClose();
                   // If this was triggered by an alert, mark it as resolved
                   if (alertId) {
                     try {

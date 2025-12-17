@@ -7,13 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '../ui/sheet';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { TaskDraft } from '../../types/tasks';
 import { CapturedItem } from '../../utils/data/store';
 import { projectId, publicAnonKey } from '../../utils/supabase/info';
 import { ApiKeySetup } from '../settings/ApiKeySetup';
 import { edgeFunctionService } from '../../utils/services/EdgeFunctionService';
 import { useDataStore } from '../../hooks/useDataStore';
+import { getPlaceSuggestions, debounce, PlacePrediction } from '../../utils/placesAutocomplete';
+import { MapPin } from 'lucide-react';
 
 interface TaskDraftSheetProps {
   isOpen: boolean;
@@ -59,7 +61,8 @@ export function TaskDraftSheet({ isOpen, onClose, item, onSave, onDiscard }: Tas
       energy: 'Shallow',
       deps: [],
       deadline: undefined,
-      tags: extractTags(item.content)
+      tags: extractTags(item.content),
+      category: 'deep_work' // Default fallback
     };
   });
 
@@ -71,6 +74,108 @@ export function TaskDraftSheet({ isOpen, onClose, item, onSave, onDiscard }: Tas
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [originalContent] = useState(item.content); // Keep original content intact
   const [showApiKeySetup, setShowApiKeySetup] = useState(false);
+
+  // Errand Location Autocomplete
+  const [suggestions, setSuggestions] = useState<PlacePrediction[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Fetch place suggestions with debouncing
+  const fetchSuggestions = async (input: string) => {
+    if (!input.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setIsLoadingSuggestions(true);
+    try {
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        console.error('Google Maps API key not found');
+        return;
+      }
+
+      const results = await getPlaceSuggestions(input, apiKey);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      setSuggestions([]);
+      setShowSuggestions(false);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  // Debounced version to avoid excessive API calls
+  const debouncedFetchSuggestions = React.useRef(
+    debounce(fetchSuggestions, 300)
+  ).current;
+
+  // Handle location input change
+  const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDraft(prev => ({ ...prev, location: value }));
+    setSelectedIndex(-1);
+    debouncedFetchSuggestions(value);
+  };
+
+  // Handle suggestion selection
+  const selectSuggestion = (suggestion: PlacePrediction) => {
+    setDraft(prev => ({ ...prev, location: suggestion.mainText }));
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setSelectedIndex(-1);
+  };
+
+  // Handle keyboard navigation for autocomplete
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedIndex(prev =>
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+          selectSuggestion(suggestions[selectedIndex]);
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        setSelectedIndex(-1);
+        break;
+    }
+  };
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        !inputRef.current?.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+        setSelectedIndex(-1);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Extract task using server function on mount if no draft exists
   useEffect(() => {
@@ -98,8 +203,9 @@ export function TaskDraftSheet({ isOpen, onClose, item, onSave, onDiscard }: Tas
           est_range: mapDurationToOption(extractedTask.est_range),
           energy: extractedTask.energy === 'deep' ? 'Deep' : 'Shallow',
           deps: extractedTask.deps || [],
-          deadline: extractedTask.deadline || undefined,
-          tags: extractedTask.tags || []
+          deadline: extractedTask.deadline ? new Date(extractedTask.deadline) : undefined,
+          tags: extractedTask.tags || [],
+          category: extractedTask.category || 'deep_work'
         });
 
         // Simple validation
@@ -156,19 +262,53 @@ export function TaskDraftSheet({ isOpen, onClose, item, onSave, onDiscard }: Tas
 
   const handleSave = async () => {
     try {
+      // Prepare tags - include errand tags if applicable
+      const finalTags = [...draft.tags];
+      if (draft.category === 'errand') {
+        if (!finalTags.includes('errand')) finalTags.push('errand');
+        if (draft.errandSubCategory && !finalTags.includes(draft.errandSubCategory)) {
+          finalTags.push(draft.errandSubCategory);
+        }
+      }
+
+      // Parse duration range
+      let minMinutes = 30;
+      let maxMinutes = 60;
+
+      const range = draft.est_range;
+      if (range.includes('hours')) {
+        const parts = range.split('-');
+        if (parts.length === 2) {
+          minMinutes = parseInt(parts[0]) * 60;
+          maxMinutes = parseInt(parts[1]) * 60;
+        } else if (range.includes('4+')) {
+          minMinutes = 4 * 60;
+          maxMinutes = 8 * 60; // Cap at 8 hours for now
+        }
+      } else {
+        // Minutes
+        const parts = range.replace(' min', '').split('-');
+        if (parts.length === 2) {
+          minMinutes = parseInt(parts[0]);
+          maxMinutes = parseInt(parts[1]);
+        }
+      }
+
       // Convert draft to Task format
       const taskData = {
         title: draft.title,
         steps: draft.steps.map(text => ({ text, completed: false })),
         acceptance: draft.acceptance,
-        est_min: parseInt(draft.est_range.split('-')[0]) || 30,
-        est_most: parseInt(draft.est_range.split('-')[1]?.replace(' min', '')) || 60,
-        est_max: parseInt(draft.est_range.split('-')[1]?.replace(' min', '')) * 1.5 || 90,
+        est_min: minMinutes,
+        est_most: Math.floor((minMinutes + maxMinutes) / 2),
+        est_max: maxMinutes,
         energy: draft.energy.toLowerCase() as 'deep' | 'shallow',
         deadline: draft.deadline?.toISOString(),
-        tags: draft.tags,
-        context: '',
-        location: '',
+        tags: finalTags,
+        category: draft.category,
+        priority: draft.category === 'errand' ? (draft.priority || 'medium') : 'medium',
+        context: draft.category === 'errand' && draft.location ? `Location: ${draft.location}` : '',
+        location: draft.category === 'errand' ? (draft.location || '') : '',
         source: 'inbox'
       };
 
@@ -652,7 +792,7 @@ export function TaskDraftSheet({ isOpen, onClose, item, onSave, onDiscard }: Tas
                   <div>
                     <Select
                       value={draft.est_range}
-                      onValueChange={(value) => setDraft(prev => ({ ...prev, est_range: value }))}
+                      onValueChange={(value: string) => setDraft(prev => ({ ...prev, est_range: value }))}
                     >
                       <SelectTrigger
                         style={{
@@ -767,6 +907,222 @@ export function TaskDraftSheet({ isOpen, onClose, item, onSave, onDiscard }: Tas
                 )}
               </div>
             </div>
+
+            {/* Category (Type) */}
+            <div>
+              <label
+                className="flex items-center mb-2"
+                style={{
+                  fontSize: 'var(--df-type-body-size)',
+                  fontWeight: 'var(--df-type-body-weight)',
+                  color: 'var(--df-text)'
+                }}
+              >
+                <Tag size={16} className="mr-1" />
+                Type
+              </label>
+              {isEditing ? (
+                <div>
+                  <Select
+                    value={draft.category}
+                    onValueChange={(value: 'deep_work' | 'admin' | 'meeting' | 'errand') => setDraft(prev => ({ ...prev, category: value }))}
+                  >
+                    <SelectTrigger
+                      style={{
+                        backgroundColor: 'var(--df-surface)',
+                        borderColor: 'var(--df-border)',
+                        color: 'var(--df-text)',
+                        minHeight: '44px'
+                      }}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="deep_work">Deep Work</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="meeting">Meeting</SelectItem>
+                      <SelectItem value="errand">Errand</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <Badge
+                  variant="outline"
+                  style={{
+                    fontSize: 'var(--df-type-caption-size)',
+                    color: 'var(--df-text)',
+                    padding: '8px 12px',
+                    borderRadius: 'var(--df-radius-pill)',
+                    borderColor: 'var(--df-border)'
+                  }}
+                >
+                  {draft.category?.replace('_', ' ')}
+                </Badge>
+              )}
+            </div>
+
+            {/* Errand Specific Fields */}
+            {draft.category === 'errand' && (
+              <div className="space-y-4 pt-4 border-t" style={{ borderColor: 'var(--df-border)' }}>
+
+                {/* Location Input with Autocomplete */}
+                <div style={{ position: 'relative' }}>
+                  <label
+                    className="flex items-center mb-2"
+                    style={{
+                      fontSize: 'var(--df-type-body-size)',
+                      fontWeight: 'var(--df-type-body-weight)',
+                      color: 'var(--df-text)'
+                    }}
+                  >
+                    <MapPin size={16} className="mr-1" />
+                    Where?
+                  </label>
+                  <div style={{ width: '100%', position: 'relative' }}>
+                    {isEditing ? (
+                      <>
+                        <Input
+                          ref={inputRef}
+                          value={draft.location || ''}
+                          onChange={handleLocationChange}
+                          onKeyDown={handleKeyDown}
+                          placeholder="e.g., Whole Foods Market, CVS Pharmacy"
+                          style={{
+                            backgroundColor: 'var(--df-surface)',
+                            borderColor: 'var(--df-border)',
+                            color: 'var(--df-text)',
+                            minHeight: '44px'
+                          }}
+                        />
+                        {/* Autocomplete Dropdown */}
+                        {showSuggestions && (
+                          <div
+                            ref={dropdownRef}
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              marginTop: '4px',
+                              backgroundColor: 'var(--df-surface)',
+                              border: '1px solid var(--df-border)',
+                              borderRadius: 'var(--df-radius-md)',
+                              maxHeight: '200px',
+                              overflowY: 'auto',
+                              zIndex: 1001,
+                              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                            }}
+                          >
+                            {isLoadingSuggestions ? (
+                              <div style={{ padding: '12px', color: 'var(--df-text-muted)' }}>Loading...</div>
+                            ) : suggestions.length > 0 ? (
+                              suggestions.map((suggestion, index) => (
+                                <div
+                                  key={suggestion.placeId}
+                                  onClick={() => selectSuggestion(suggestion)}
+                                  style={{
+                                    padding: '12px',
+                                    cursor: 'pointer',
+                                    backgroundColor: selectedIndex === index ? 'var(--df-surface-alt)' : 'transparent',
+                                    borderBottom: index < suggestions.length - 1 ? '1px solid var(--df-border)' : 'none'
+                                  }}
+                                  onMouseEnter={() => setSelectedIndex(index)}
+                                >
+                                  <div style={{ fontWeight: '500', color: 'var(--df-text)' }}>{suggestion.mainText}</div>
+                                  <div style={{ fontSize: '0.875em', color: 'var(--df-text-muted)' }}>{suggestion.secondaryText}</div>
+                                </div>
+                              ))
+                            ) : (
+                              <div style={{ padding: '12px', color: 'var(--df-text-muted)' }}>No results found</div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p style={{
+                        fontSize: 'var(--df-type-body-size)',
+                        color: 'var(--df-text)',
+                        padding: '12px',
+                        backgroundColor: 'var(--df-surface-alt)',
+                        borderRadius: 'var(--df-radius-sm)'
+                      }}>
+                        {draft.location || 'No location specified'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Errand Category */}
+                  <div>
+                    <label
+                      className="flex items-center mb-2"
+                      style={{
+                        fontSize: 'var(--df-type-body-size)',
+                        fontWeight: 'var(--df-type-body-weight)',
+                        color: 'var(--df-text)'
+                      }}
+                    >
+                      Category
+                    </label>
+                    {isEditing ? (
+                      <Select
+                        value={draft.errandSubCategory || 'shopping'}
+                        onValueChange={(value: any) => setDraft(prev => ({ ...prev, errandSubCategory: value }))}
+                      >
+                        <SelectTrigger style={{ backgroundColor: 'var(--df-surface)', borderColor: 'var(--df-border)', color: 'var(--df-text)', minHeight: '44px' }}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="shopping">🛒 Shopping</SelectItem>
+                          <SelectItem value="pickup">📦 Pickup</SelectItem>
+                          <SelectItem value="dropoff">📤 Dropoff</SelectItem>
+                          <SelectItem value="appointment">📅 Appointment</SelectItem>
+                          <SelectItem value="other">📍 Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p style={{ padding: '12px', backgroundColor: 'var(--df-surface-alt)', borderRadius: 'var(--df-radius-sm)', color: 'var(--df-text)' }}>
+                        {draft.errandSubCategory || 'shopping'}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Priority */}
+                  <div>
+                    <label
+                      className="flex items-center mb-2"
+                      style={{
+                        fontSize: 'var(--df-type-body-size)',
+                        fontWeight: 'var(--df-type-body-weight)',
+                        color: 'var(--df-text)'
+                      }}
+                    >
+                      Priority
+                    </label>
+                    {isEditing ? (
+                      <Select
+                        value={draft.priority || 'medium'}
+                        onValueChange={(value: any) => setDraft(prev => ({ ...prev, priority: value }))}
+                      >
+                        <SelectTrigger style={{ backgroundColor: 'var(--df-surface)', borderColor: 'var(--df-border)', color: 'var(--df-text)', minHeight: '44px' }}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p style={{ padding: '12px', backgroundColor: 'var(--df-surface-alt)', borderRadius: 'var(--df-radius-sm)', color: 'var(--df-text)' }}>
+                        {draft.priority || 'medium'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Dependencies */}
             <div>

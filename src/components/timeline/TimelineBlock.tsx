@@ -1,15 +1,17 @@
 import React from 'react';
-import { Briefcase, Users, Clock, MapPin, Coffee, Calendar, Car, Lock, Pin } from 'lucide-react';
+import { Briefcase, Users, Clock, MapPin, Coffee, Calendar, Car, Lock, Pin, FileText, CheckSquare } from 'lucide-react';
 import { ConflictIndicator } from '../schedule/ConflictIndicator';
 import { Badge } from '../ui/badge';
 import { ScheduleBlock } from '../screens/ScheduleScreen';
 import { ConflictDetection } from '../../utils/schedule/conflictDetection';
+import { TimeTrackingButton } from '../schedule/TimeTrackingButton';
 
 interface TimelineBlockProps {
   block: ScheduleBlock;
   style: React.CSSProperties;
   onMouseDownResize: (blockId: string, handle: 'top' | 'bottom', event: React.MouseEvent) => void;
   onTogglePin: (blockId: string) => void;
+  onClick: () => void;
   isResizing?: boolean;
   conflict?: ConflictDetection;
 }
@@ -19,100 +21,118 @@ export function TimelineBlock({
   style,
   onMouseDownResize,
   onTogglePin,
+  onClick,
   isResizing = false,
   conflict
 }: TimelineBlockProps) {
 
-  const getBlockStyles = () => {
-    const baseStyles = {
+  const getBlockStyles = (): React.CSSProperties => {
+    const baseStyles: React.CSSProperties = {
       borderRadius: 'var(--df-radius-md)',
-      border: '1px solid',
+      // border: '1px solid', // REMOVED
       cursor: isResizing ? 'ns-resize' : 'default',
-      transition: isResizing ? 'none' : 'all var(--df-anim-fast) ease-in-out'
+      transition: isResizing ? 'none' : 'all var(--df-anim-fast) ease-in-out',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)', // Card Shadow
+      borderLeftWidth: '4px',
+      borderLeftStyle: 'solid',
+      backgroundColor: 'white', // Default fallback
+      overflow: 'hidden' // Ensure rounded corners clip content
+    };
+
+    // Color Palette - Enhanced for better visibility
+    const colors = {
+      deep: { base: '#2563eb', bg: '#dbeafe' }, // Blue-100 for better visibility (was Blue-50)
+      meeting: { base: '#9333ea', bg: 'rgba(147, 51, 234, 0.15)' }, // Increased visibility
+      admin: { base: '#64748b', bg: 'rgba(100, 116, 139, 0.15)' },
+      errand: { base: '#f97316', bg: 'rgba(249, 115, 22, 0.15)' },
+      buffer: { base: '#9ca3af', bg: 'rgba(156, 163, 175, 0.10)' },
+      micro: { base: '#16a34a', bg: 'rgba(22, 163, 74, 0.15)' },
+      calendar: { base: '#ec4899', bg: 'rgba(236, 72, 153, 0.15)' },
+      travel: { base: '#0d9488', bg: 'rgba(13, 148, 136, 0.10)' },
+      prep: { base: '#eab308', bg: 'rgba(234, 179, 8, 0.18)' },
+      debrief: { base: '#4f46e5', bg: 'rgba(79, 70, 229, 0.18)' }
     };
 
     switch (block.type) {
       case 'deep':
         return {
           ...baseStyles,
-          backgroundColor: 'rgba(37, 99, 235, 0.12)',
-          borderColor: 'var(--df-primary)',
-          borderWidth: block.isPinned ? '2px' : '1px',
+          backgroundColor: colors.deep.bg,
+          borderLeftColor: colors.deep.base,
           borderLeftWidth: '4px',
-          borderLeftColor: 'var(--df-primary)'
+          borderLeftStyle: 'solid' as const,
+          ...(block.isPinned && { border: `2px solid ${colors.deep.base}` })
         };
-
       case 'meeting':
         return {
           ...baseStyles,
-          backgroundColor: 'var(--df-surface-alt)',
-          borderColor: 'var(--df-border)',
-          borderWidth: block.isPinned ? '2px' : '1px',
+          backgroundColor: colors.meeting.bg,
+          borderLeftColor: colors.meeting.base,
           borderLeftWidth: '4px',
-          borderLeftColor: 'var(--df-text-muted)'
+          borderLeftStyle: 'solid' as const,
+          ...(block.isPinned && { border: `2px solid ${colors.meeting.base}` })
         };
-
       case 'admin':
         return {
           ...baseStyles,
-          backgroundColor: 'rgba(91, 100, 114, 0.12)',
-          borderColor: 'var(--df-text-muted)',
-          borderWidth: block.isPinned ? '2px' : '1px',
+          backgroundColor: colors.admin.bg,
+          borderLeftColor: colors.admin.base,
           borderLeftWidth: '4px',
-          borderLeftColor: 'var(--df-text-muted)'
+          borderLeftStyle: 'solid' as const,
+          ...(block.isPinned && { border: `2px solid ${colors.admin.base}` })
         };
-
       case 'errand':
         return {
           ...baseStyles,
-          backgroundColor: 'rgba(217, 119, 6, 0.12)',
-          borderColor: 'var(--df-warning)',
-          borderWidth: block.isPinned ? '2px' : '1px',
+          backgroundColor: colors.errand.bg,
+          borderLeftColor: colors.errand.base,
           borderLeftWidth: '4px',
-          borderLeftColor: 'var(--df-warning)'
+          borderLeftStyle: 'solid' as const,
+          ...(block.isPinned && { border: `2px solid ${colors.errand.base}` })
         };
-
       case 'buffer':
         return {
           ...baseStyles,
-          backgroundColor: 'rgba(91, 100, 114, 0.08)',
-          borderColor: 'var(--df-border)',
-          borderWidth: block.isPinned ? '2px' : '1px',
-          borderStyle: 'dashed'
+          backgroundColor: colors.buffer.bg,
+          borderLeftColor: colors.buffer.base,
+          borderLeftStyle: 'dashed',
+          boxShadow: 'none',
+          border: '1px dashed #e2e8f0' // Light border for buffers
         };
-
       case 'micro-break':
         return {
           ...baseStyles,
-          backgroundColor: 'rgba(34, 197, 94, 0.08)',
-          borderColor: 'var(--df-success)',
-          borderWidth: block.isPinned ? '2px' : '1px',
-          borderLeftWidth: '2px',
-          borderLeftColor: 'var(--df-success)'
+          backgroundColor: colors.micro.bg,
+          borderLeftColor: colors.micro.base,
+          borderLeftWidth: '3px'
         };
-
       case 'calendar':
         return {
           ...baseStyles,
-          backgroundColor: 'rgba(37, 99, 235, 0.08)',
-          borderColor: 'var(--df-primary)',
-          borderWidth: '1px',
-          borderLeftWidth: '4px',
-          borderLeftColor: 'var(--df-primary)',
-          opacity: 0.8
+          backgroundColor: colors.calendar.bg,
+          borderLeftColor: colors.calendar.base,
         };
-
       case 'travel':
         return {
           ...baseStyles,
-          backgroundColor: 'rgba(217, 119, 6, 0.08)',
-          borderColor: 'var(--df-warning)',
-          borderWidth: '1px',
-          borderLeftWidth: '2px',
-          borderLeftColor: 'var(--df-warning)',
-          borderStyle: 'dashed'
+          backgroundColor: colors.travel.bg,
+          borderLeftColor: colors.travel.base,
+          borderLeftStyle: 'dashed',
+          boxShadow: 'none',
+          border: '1px dashed #cbd5e1'
         };
-
+      case 'prep':
+        return {
+          ...baseStyles,
+          backgroundColor: colors.prep.bg,
+          borderLeftColor: colors.prep.base,
+        };
+      case 'debrief':
+        return {
+          ...baseStyles,
+          backgroundColor: colors.debrief.bg,
+          borderLeftColor: colors.debrief.base,
+        };
       default:
         return baseStyles;
     }
@@ -136,6 +156,12 @@ export function TimelineBlock({
         return <Calendar size={16} />;
       case 'travel':
         return <Car size={16} />;
+      case 'prep':
+        // Mapping FileText requires importing if not present, checking imports...
+        // Assuming simple icon addition for now, will fix imports in next step if broken
+        return <FileText size={16} />;
+      case 'debrief':
+        return <CheckSquare size={16} />;
       default:
         return null;
     }
@@ -176,6 +202,11 @@ export function TimelineBlock({
         ...style,
         ...getBlockStyles(),
         minHeight: '40px'
+      }}
+      onClick={(e) => {
+        // Prevent click when pinning or resizing
+        if ((e.target as HTMLElement).closest('button') || isResizing) return;
+        onClick();
       }}
     >
       {/* Top Resize Handle */}
@@ -298,19 +329,31 @@ export function TimelineBlock({
               {formatTimeRange()}
             </span>
 
-            {block.type === 'buffer' && (
-              <Badge
-                variant="outline"
-                className="text-xs"
-                style={{
-                  borderColor: 'var(--df-border)',
-                  color: 'var(--df-text-muted)',
-                  fontSize: '10px'
-                }}
-              >
-                Buffer
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Time Tracking for workable blocks */}
+              {(block.type === 'deep' || block.type === 'admin') && block.taskId && (
+                <TimeTrackingButton
+                  taskId={block.taskId}
+                  taskTitle={block.title}
+                  size="sm"
+                  showDuration={true}
+                />
+              )}
+
+              {block.type === 'buffer' && (
+                <Badge
+                  variant="outline"
+                  className="text-xs"
+                  style={{
+                    borderColor: 'var(--df-border)',
+                    color: 'var(--df-text-muted)',
+                    fontSize: '10px'
+                  }}
+                >
+                  Buffer
+                </Badge>
+              )}
+            </div>
           </div>
         )}
       </div>

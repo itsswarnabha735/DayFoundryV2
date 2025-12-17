@@ -92,19 +92,36 @@ serve(async (req) => {
         if (action === "callback" && req.method === "POST") {
             console.log('calendar-auth: POST callback - exchanging code for tokens');
 
-            const { code, user_id } = await req.json();
+            // Verify User via Auth Header (Required since we must disable Gateway JWT enforcement)
+            const authHeader = req.headers.get('Authorization');
+            if (!authHeader) {
+                console.error('Missing Authorization header');
+                throw new Error('Missing Authorization header');
+            }
+
+            // Create client (auth header in global is sometimes not enough for getUser)
+            const supabaseClient = createClient(
+                Deno.env.get('SUPABASE_URL') ?? '',
+                Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+            );
+
+            const token = authHeader.replace('Bearer ', '');
+            const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+
+            if (userError || !user) {
+                console.error('Invalid user token:', userError);
+                throw new Error(`Auth Error: ${userError?.message || 'User is null'} (Header len: ${authHeader.length})`);
+            }
+
+            const { code } = await req.json();
 
             if (!code) {
                 console.error('Missing authorization code');
                 throw new Error('Missing authorization code');
             }
 
-            if (!user_id) {
-                console.error('Missing user_id');
-                throw new Error('Missing user_id parameter');
-            }
-
-            console.log('Exchanging code for user:', user_id);
+            const user_id = user.id; // Use trusted ID from verified token
+            console.log('Exchanging code for verified user:', user_id);
 
             const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
                 method: "POST",

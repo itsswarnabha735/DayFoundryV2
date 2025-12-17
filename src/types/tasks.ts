@@ -9,6 +9,11 @@ export interface TaskDraft {
   deps: string[];
   deadline?: Date;
   tags: string[];
+  category?: 'deep_work' | 'admin' | 'meeting' | 'errand';
+  // Errand specific fields
+  location?: string;
+  priority?: 'high' | 'medium' | 'low';
+  errandSubCategory?: 'shopping' | 'appointment' | 'pickup' | 'dropoff' | 'other';
 }
 
 export interface TaskStep {

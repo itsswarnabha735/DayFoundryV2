@@ -28,11 +28,12 @@ export class EdgeFunctionService {
       deps?: string[];
       deadline?: string | null;
       tags?: string[];
+      category?: 'deep_work' | 'admin' | 'meeting' | 'errand';
     };
   }> {
     return withRetry(async () => {
-      // Use the unified server endpoint
-      const url = `${this.baseUrl}/make-server-72dfd380/extract-task`;
+      // Use the direct edge function
+      const url = `${this.baseUrl}/extract-task`;
       console.log('Calling extract-task at:', url);
 
       const payload = {
@@ -97,7 +98,8 @@ export class EdgeFunctionService {
             energy: taskData.energy?.toLowerCase() as 'deep' | 'shallow',
             deps: taskData.deps || [],
             deadline: taskData.deadline || null,
-            tags: taskData.tags || []
+            tags: taskData.tags || [],
+            category: taskData.category
           }
         };
       } else {
@@ -232,7 +234,7 @@ export class EdgeFunctionService {
     return withRetry(async () => {
       // Map function names to server endpoints
       const endpointMap: Record<string, string> = {
-        'extract-task': '/make-server-72dfd380/extract-task',
+        'extract-task': '/extract-task',
         'propose-outcomes': '/make-server-72dfd380/propose-outcomes',
         'summarize-reflection': '/summarize-reflection', // Keep standalone for now
         'solve-schedule-proxy': '/solve-schedule-proxy', // Keep standalone for now  
@@ -290,6 +292,7 @@ class FallbackEdgeFunctionService {
       deps?: string[];
       deadline?: string | null;
       tags?: string[];
+      category?: 'deep_work' | 'admin' | 'meeting' | 'errand';
     };
   }> {
     console.log('Using fallback task extraction (client-side)');
@@ -306,10 +309,25 @@ class FallbackEdgeFunctionService {
   "est_range": "30-60 min",
   "energy": "Deep",
   "deps": ["Dependency 1", "Dependency 2"],
-  "tags": ["tag1", "tag2"]
+  "tags": ["tag1", "tag2"],
+  "category": "deep_work"
 }
 
 Content captured: "${rawText}"
+
+STRICT CATEGORIZATION RULES:
+1. DEEP WORK ('deep_work'): High focus. Strategy, coding, writing.
+2. ADMIN ('admin'): Low focus, routine. EMAILS, PAYING BILLS, FILING. 
+   - Note: Emails and texts are ADMIN.
+3. WEBINAR / MEETING ('meeting'): ANY synchronous conversation. 
+   - Note: CALLS (phone/video) are MEETINGS. "Call Mom" is a meeting.
+4. ERRAND ('errand'): Requires going somewhere (groceries, gym).
+
+EXAMPLES:
+- "Call Vinit" -> meeting
+- "Email Vinit" -> admin
+- "Write report" -> deep_work
+- "Buy milk" -> errand
 
 Important: 
 - Return only valid JSON, no additional text
@@ -317,7 +335,8 @@ Important:
 - Steps should be specific actions, not vague descriptions
 - Acceptance should define "done" clearly
 - est_range should be one of: "15-30 min", "30-60 min", "1-2 hours", "2-4 hours", "4+ hours"
-- Energy should be "Deep" or "Shallow"
+- Energy should be "Deep" or "Shallow" (Deep for deep_work, Shallow for others)
+- category must be one of: "deep_work", "admin", "meeting", "errand"
 - Only include dependencies if the task truly depends on other tasks
 - Use relevant, helpful tags
 
@@ -377,7 +396,8 @@ JSON:`;
                 energy: taskData.energy?.toLowerCase() === 'deep' ? 'deep' : 'shallow',
                 deps: taskData.deps || [],
                 deadline: null,
-                tags: taskData.tags || []
+                tags: taskData.tags || [],
+                category: taskData.category
               }
             };
           }
@@ -402,7 +422,8 @@ JSON:`;
         energy: words.some(w => ['research', 'analyze', 'design', 'write', 'plan'].includes(w.toLowerCase())) ? 'deep' : 'shallow',
         deps: [],
         deadline: null,
-        tags: ['inbox']
+        tags: ['inbox'],
+        category: 'deep_work'
       }
     };
   }
@@ -630,7 +651,9 @@ JSON:`;
 
           if (+end <= +we) {
             blocks.push({
-              block_type: t.energy === 'deep' ? 'deep_work' : 'admin',
+              block_type: (t.category && ['deep_work', 'admin', 'meeting', 'errand'].includes(t.category))
+                ? t.category
+                : (t.energy === 'deep' ? 'deep_work' : 'admin'),
               task_id: t.id ?? null,
               start_at: cursorW.toISOString(),
               end_at: end.toISOString(),
@@ -705,7 +728,12 @@ export class ResilientEdgeFunctionService extends EdgeFunctionService {
   private lastServiceCheck = Date.now(); // Assume we just checked
   private readonly SERVICE_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
-  async extractTask(rawText: string): Promise<{
+  async extractTask(rawText: string, context?: {
+    current_time?: string;
+    timezone?: string;
+    recent_tasks?: string[];
+    user_profile?: string;
+  }): Promise<{
     task: {
       title: string;
       steps: string[];
@@ -715,6 +743,7 @@ export class ResilientEdgeFunctionService extends EdgeFunctionService {
       deps?: string[];
       deadline?: string | null;
       tags?: string[];
+      category?: 'deep_work' | 'admin' | 'meeting' | 'errand';
     };
   }> {
     // If service has been failing recently, try fallback first
@@ -723,7 +752,7 @@ export class ResilientEdgeFunctionService extends EdgeFunctionService {
     }
 
     try {
-      const result = await super.extractTask(rawText);
+      const result = await super.extractTask(rawText, context);
       this.isServiceAvailable = true;
       return result;
     } catch (error) {

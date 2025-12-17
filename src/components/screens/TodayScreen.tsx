@@ -12,10 +12,13 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from '../ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuSeparator } from '../ui/dropdown-menu';
 import { authManager } from '../../utils/auth';
 import { Task } from '../../utils/data/DataStore';
+import { TimeTrackingButton } from '../schedule/TimeTrackingButton';
+import { ProactiveSuggestionsBar } from '../dashboard/ProactiveSuggestionsBar';
 
 interface TodayScreenProps {
   isDark?: boolean;
   toggleTheme?: () => void;
+  onNavigate?: (tab: 'today' | 'inbox' | 'schedule' | 'focus' | 'review') => void;
 }
 
 export interface TodayScreenRef {
@@ -23,7 +26,7 @@ export interface TodayScreenRef {
 }
 
 export const TodayScreen = forwardRef<TodayScreenRef, TodayScreenProps>(
-  ({ isDark, toggleTheme }, ref) => {
+  ({ isDark, toggleTheme, onNavigate }, ref) => {
     const [showSettings, setShowSettings] = useState(false);
     const [showCompose, setShowCompose] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -61,7 +64,7 @@ export const TodayScreen = forwardRef<TodayScreenRef, TodayScreenProps>(
       day: 'numeric'
     });
 
-    const { data, loading, refresh } = useDataStore();
+    const { data, loading, refresh, updateTask } = useDataStore();
 
     // Listen for realtime updates
     useEffect(() => {
@@ -90,10 +93,37 @@ export const TodayScreen = forwardRef<TodayScreenRef, TodayScreenProps>(
     });
 
     const overdueTasks = data.tasks.filter(task => {
-      // Tasks created before today and not completed
-      const isCompleted = task.steps.length > 0 && task.steps.every(step => step.completed);
-      return !isCompleted && task.created_at < todayStr;
+      // Tasks created before today (overdue)
+      // Keep all overdue tasks including completed ones to show visual feedback
+      return task.created_at < todayStr;
     });
+
+    // Handler for toggling task completion
+    const handleToggleComplete = async (taskId: string, completed: boolean) => {
+      try {
+        // Find the task to update
+        const task = data.tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        let updatedSteps;
+        if (task.steps.length === 0) {
+          // If task has no steps, create a default step with completed status
+          updatedSteps = [{ text: 'Complete task', completed: completed }];
+        } else {
+          // Update all existing steps to the new completed state
+          updatedSteps = task.steps.map(step => ({
+            ...step,
+            completed: completed
+          }));
+        }
+
+        // Note: Don't call refresh() here - the updateTask triggers 
+        // a data-updated event which the useEffect listener handles
+        await updateTask(taskId, { steps: updatedSteps });
+      } catch (error) {
+        console.error('Failed to update task completion:', error);
+      }
+    };
 
     const completedTodayTasks = todayTasks.filter(task =>
       task.steps.length > 0 && task.steps.every(step => step.completed)
@@ -237,6 +267,26 @@ export const TodayScreen = forwardRef<TodayScreenRef, TodayScreenProps>(
           className="flex-1 overflow-auto px-4 py-4"
           style={{ paddingBottom: 'var(--df-space-24)' }}
         >
+          {/* Proactive Suggestions */}
+          <ProactiveSuggestionsBar
+            onAction={(actionType, payload) => {
+              if (actionType === 'compose_day') {
+                setShowCompose(true);
+              } else if (actionType === 'sync_calendar') {
+                // For MVP, we point them to Compose/Schedule
+                alert('Opening planner to sync events...');
+                setShowCompose(true);
+              } else if (actionType === 'review_conflict') {
+                // Navigate to Schedule Tab to see/resolve conflict
+                if (onNavigate) {
+                  onNavigate('schedule');
+                } else {
+                  alert('Conflict detected! Please check your Schedule tab to adjust times.');
+                }
+              }
+            }}
+          />
+
           {/* Today's Tasks */}
           <section className="mb-6">
             <h2
@@ -274,6 +324,7 @@ export const TodayScreen = forwardRef<TodayScreenRef, TodayScreenProps>(
                     <TaskItem
                       key={task.id}
                       task={task}
+                      onToggleComplete={handleToggleComplete}
                     />
                   ))}
                   {todayTasks.length > 5 && (
@@ -337,6 +388,7 @@ export const TodayScreen = forwardRef<TodayScreenRef, TodayScreenProps>(
                       key={task.id}
                       task={task}
                       isOverdue={true}
+                      onToggleComplete={handleToggleComplete}
                     />
                   ))}
                 </div>
@@ -494,18 +546,32 @@ TodayScreen.displayName = 'TodayScreen';
 interface TaskItemProps {
   task: Task;
   isOverdue?: boolean;
+  onToggleComplete?: (taskId: string, completed: boolean) => void;
 }
 
-function TaskItem({ task, isOverdue }: TaskItemProps) {
+function TaskItem({ task, isOverdue, onToggleComplete }: TaskItemProps) {
   const isCompleted = task.steps.length > 0 && task.steps.every(step => step.completed);
 
   // Format estimate
   const getEstimateText = () => {
     if (task.est_min && task.est_max) {
-      if (task.est_min === task.est_max) return `${task.est_min}m`;
+      if (task.est_min === task.est_max) {
+        return task.est_min >= 60 ? `${(task.est_min / 60).toFixed(1).replace('.0', '')}h` : `${task.est_min}m`;
+      }
+
+      // Check if both are hours (multiples of 60 roughly or just large)
+      if (task.est_min >= 60 && task.est_max >= 60) {
+        const minH = (task.est_min / 60).toFixed(1).replace('.0', '');
+        const maxH = (task.est_max / 60).toFixed(1).replace('.0', '');
+        return `${minH}-${maxH}h`;
+      }
+
       return `${task.est_min}-${task.est_max}m`;
     }
-    if (task.est_most) return `${task.est_most}m`;
+
+    if (task.est_most) {
+      return task.est_most >= 60 ? `${(task.est_most / 60).toFixed(1).replace('.0', '')}h` : `${task.est_most}m`;
+    }
     return null;
   };
 
@@ -518,13 +584,29 @@ function TaskItem({ task, isOverdue }: TaskItemProps) {
     return `Since ${createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
   };
 
+  const handleCheckboxClick = () => {
+    if (onToggleComplete) {
+      onToggleComplete(task.id, !isCompleted);
+    }
+  };
+
   return (
     <div className="flex items-start space-x-2 py-1.5">
       <div
-        className="flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5"
+        className="flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 cursor-pointer hover:opacity-80 transition-opacity"
         style={{
           backgroundColor: isCompleted ? 'var(--df-success)' : 'transparent',
           borderColor: isCompleted ? 'var(--df-success)' : 'var(--df-border)'
+        }}
+        onClick={handleCheckboxClick}
+        role="checkbox"
+        aria-checked={isCompleted}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleCheckboxClick();
+          }
         }}
       >
         {isCompleted && (
@@ -582,6 +664,19 @@ function TaskItem({ task, isOverdue }: TaskItemProps) {
             </div>
           )}
 
+          <div
+            className="px-1.5 py-0.5 rounded font-medium"
+            style={{
+              backgroundColor: 'var(--df-surface-alt)',
+              color: 'var(--df-text-muted)',
+              border: '1px solid var(--df-border)',
+              fontSize: '10px',
+              lineHeight: '1.2'
+            }}
+          >
+            {(task.category || (task.energy === 'deep' ? 'deep_work' : 'general')).replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+          </div>
+
           {task.energy && (
             <div
               className="px-1.5 py-0.5 rounded font-medium"
@@ -598,6 +693,16 @@ function TaskItem({ task, isOverdue }: TaskItemProps) {
           )}
         </div>
       </div>
+
+      {/* Time Tracking Button */}
+      {!isCompleted && (
+        <TimeTrackingButton
+          taskId={task.id}
+          taskTitle={task.title}
+          size="sm"
+          showDuration={true}
+        />
+      )}
     </div>
   );
 }

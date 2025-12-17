@@ -15,6 +15,7 @@ export interface Task {
   energy: 'deep' | 'shallow';
   deadline?: string;
   tags: string[];
+  category?: 'deep_work' | 'admin' | 'meeting' | 'errand';
   context?: string;
   location?: string;
   source: string;
@@ -269,7 +270,7 @@ export class MockDataStore {
     const now = new Date();
     const nextHour = new Date(now.getTime() + 60 * 60 * 1000);
     const twoHoursLater = new Date(nextHour.getTime() + 60 * 60 * 1000);
-    
+
     this.scheduleBlocks = [
       {
         id: generateId(),
@@ -415,7 +416,7 @@ export class MockDataStore {
       user_id: 'mock-user',
       updated_at: new Date().toISOString()
     } as Settings;
-    
+
     return 'settings-update';
   }
 
@@ -475,10 +476,10 @@ export class MockDataStore {
 
   // Record plan vs actual for tracking
   async recordPlanActual(
-    taskId: string, 
-    plannedMin: number, 
-    actualMin: number, 
-    blockers: string[] = [], 
+    taskId: string,
+    plannedMin: number,
+    actualMin: number,
+    blockers: string[] = [],
     notes?: string
   ): Promise<string> {
     const historyEntry = {
@@ -507,8 +508,8 @@ export class MockDataStore {
   private emitDataUpdate(table: string) {
     // Emit update events for UI to refresh
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('data-updated', { 
-        detail: { table, payload: {} } 
+      window.dispatchEvent(new CustomEvent('data-updated', {
+        detail: { table, payload: {} }
       }));
     }
   }

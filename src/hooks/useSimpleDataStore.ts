@@ -9,6 +9,7 @@ export interface Task {
   energy: 'deep' | 'shallow';
   deadline?: string;
   tags: string[];
+  category?: 'deep_work' | 'admin' | 'meeting' | 'errand';
   context?: string;
   location?: string;
   est_min?: number;

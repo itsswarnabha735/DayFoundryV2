@@ -263,9 +263,19 @@ serve(async (req) => {
             await supabaseClient.from("bundle_suggestions").insert(bundlesToInsert);
         }
 
+        // Generate generic constraints for Compose Day from the bundles
+        const composeConstraints = enrichedBundles.map((b: any) => ({
+            type: 'blocked_time_range',
+            start: b.suggested_start_at,
+            end: b.suggested_end_at,
+            reason: `Errand bundle: ${b.items.length} stops`,
+            allow_override: false
+        }));
+
         return new Response(JSON.stringify({
             success: true,
             bundles: enrichedBundles,
+            compose_day_constraints: composeConstraints, // New field for Orchestrator/Compose Day
             reasoning: parsedResult.reasoning
         }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" }

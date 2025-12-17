@@ -36,12 +36,12 @@ serve(async (req) => {
     if (!GEMINI_API_KEY) {
       console.error('GEMINI_API_KEY is not set')
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'API key not configured' 
+        JSON.stringify({
+          success: false,
+          error: 'API key not configured'
         }),
-        { 
-          status: 500, 
+        {
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
@@ -51,12 +51,12 @@ serve(async (req) => {
 
     if (!notes || !notes.trim()) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Notes are required' 
+        JSON.stringify({
+          success: false,
+          error: 'Notes are required'
         }),
-        { 
-          status: 400, 
+        {
+          status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
@@ -103,8 +103,8 @@ Respond in this exact JSON format:
 }`
 
     console.log('Calling Gemini API to extract actions from notes...')
-    
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`, {
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -170,12 +170,12 @@ Respond in this exact JSON format:
     console.log(`Extracted ${extractedData.tasks.length} tasks from meeting notes`)
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        data: extractedData 
+      JSON.stringify({
+        success: true,
+        data: extractedData
       }),
-      { 
-        status: 200, 
+      {
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
@@ -183,12 +183,12 @@ Respond in this exact JSON format:
   } catch (error) {
     console.error('Error extracting actions from notes:', error)
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message || 'Failed to extract actions from notes' 
+      JSON.stringify({
+        success: false,
+        error: error.message || 'Failed to extract actions from notes'
       }),
-      { 
-        status: 500, 
+      {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )

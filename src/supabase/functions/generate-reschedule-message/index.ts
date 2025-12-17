@@ -42,12 +42,12 @@ serve(async (req) => {
     if (!GEMINI_API_KEY) {
       console.error('GEMINI_API_KEY is not set')
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'API key not configured' 
+        JSON.stringify({
+          success: false,
+          error: 'API key not configured'
         }),
-        { 
-          status: 500, 
+        {
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
@@ -57,12 +57,12 @@ serve(async (req) => {
 
     if (!conflicts || !strategy) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Conflicts and strategy are required' 
+        JSON.stringify({
+          success: false,
+          error: 'Conflicts and strategy are required'
         }),
-        { 
-          status: 400, 
+        {
+          status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
@@ -110,8 +110,8 @@ Respond in this exact JSON format:
 }`
 
     console.log('Calling Gemini API to generate reschedule message...')
-    
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`, {
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -156,7 +156,7 @@ Respond in this exact JSON format:
     } catch (parseError) {
       console.error('Failed to parse JSON response:', parseError)
       console.error('Raw response:', generatedText)
-      
+
       // Fallback to a simple message based on the context
       const fallbackMessage = generateFallbackMessage(conflicts, movedItems, totalDelayMinutes)
       messageData = {
@@ -172,12 +172,12 @@ Respond in this exact JSON format:
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        data: messageData 
+      JSON.stringify({
+        success: true,
+        data: messageData
       }),
-      { 
-        status: 200, 
+      {
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
@@ -185,12 +185,12 @@ Respond in this exact JSON format:
   } catch (error) {
     console.error('Error generating reschedule message:', error)
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message || 'Failed to generate reschedule message' 
+      JSON.stringify({
+        success: false,
+        error: error.message || 'Failed to generate reschedule message'
       }),
-      { 
-        status: 500, 
+      {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )

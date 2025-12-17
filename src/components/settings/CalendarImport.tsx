@@ -263,10 +263,18 @@ export function CalendarImport({ onClose }: CalendarImportProps) {
         // Wait, I should probably update calendar-webhook to handle manual sync requests too.
         // For now, let's point to calendar-webhook and see if we can make it work.
 
+        // Ensure session is fresh
+        const { data: { session: freshSession }, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !freshSession) {
+          console.error("Session refresh failed:", refreshError);
+          throw new Error("Authentication failed. Please sign in again.");
+        }
+
         const response = await fetch(`https://${projectId}.supabase.co/functions/v1/calendar-webhook`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${session?.access_token || publicAnonKey}`,
+            'Authorization': `Bearer ${freshSession.access_token}`,
+            'apikey': publicAnonKey,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
@@ -278,25 +286,36 @@ export function CalendarImport({ onClose }: CalendarImportProps) {
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Google Calendar sync failed:', response.status, errorText);
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch (e) {
-            errorData = { error: errorText };
-          }
-          result = errorData;
-          console.log('Manual sync result:', result);
 
-          if (result.error) {
-            console.error("Sync Error Details:", result.details);
+          if (response.status === 401 || errorText.includes('refresh token')) {
+            result = { error: 'Authentication expired. Please reconnect.' };
+          } else {
+            let errorData;
+            try {
+              errorData = JSON.parse(errorText);
+            } catch (e) {
+              errorData = { error: errorText };
+            }
+            result = errorData;
           }
+        } else {
+          result = await response.json();
+        }
 
-          if (result.eventsSynced !== undefined) {
-            console.log(`Synced ${result.eventsSynced} events from Google.`);
-          }
+        console.log('Manual sync result:', result);
+
+        if (result.error) {
+          console.error("Sync Error Full:", result);
+        }
+
+        if (result.debug) {
+          console.log("Debug Info:", JSON.stringify(result.debug, null, 2));
+        }
+
+        if (result.eventsSynced !== undefined) {
+          console.log(`Synced ${result.eventsSynced} events from Google.`);
         }
       } else {
-        // Call import-ics for ICS URL calendars
         const source = sources.find(s => s.id === sourceId);
         if (!source) throw new Error('Calendar not found');
         result = await importICS(source.source, sourceId);
@@ -395,13 +414,13 @@ export function CalendarImport({ onClose }: CalendarImportProps) {
 
   useEffect(() => {
     // Check for OAuth code in URL
-    // const params = new URLSearchParams(window.location.search);
-    // const code = params.get('code');
-    // const provider = params.get('provider');
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const provider = params.get('provider');
 
-    // if (code && provider === 'google') {
-    //   handleAuthCallback(code);
-    // }
+    if (code && provider === 'google') {
+      handleAuthCallback(code);
+    }
   }, []);
 
   const handleAuthCallback = async (code: string) => {
@@ -417,12 +436,17 @@ export function CalendarImport({ onClose }: CalendarImportProps) {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
+          'apikey': publicAnonKey,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ code, user_id: session.user.id })
       });
 
-      if (!response.ok) throw new Error('Failed to exchange token');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Token exchange failed:', response.status, errorText);
+        throw new Error('Failed to exchange token');
+      }
 
       await loadCalendars();
     } catch (error) {
@@ -469,12 +493,35 @@ export function CalendarImport({ onClose }: CalendarImportProps) {
       console.log('Token type:', session.token_type);
       console.log('Expires at:', session.expires_at);
 
-      const returnUrl = window.location.href;
-      console.log('Making request to calendar-auth with return URL:', returnUrl);
+      console.log('--- DEBUG: Calendar Auth Connection ---');
+      console.log('Project ID:', projectId);
+      console.log('Target URL:', `https://${projectId}.supabase.co/functions/v1/calendar-auth/url`);
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/calendar-auth/url?return_url=${encodeURIComponent(returnUrl)}`, {
+      const anonKeySnippet = publicAnonKey ? `${publicAnonKey.substring(0, 10)}...` : 'UNDEFINED';
+      console.log('Anon Key (apikey):', anonKeySnippet);
+
+      const authTokenSnippet = session.access_token ? `${session.access_token.substring(0, 10)}...` : 'UNDEFINED';
+      console.log('Auth Token:', authTokenSnippet);
+
+      // Check for client mismatch
+      if (supabase.supabaseUrl && !supabase.supabaseUrl.includes(projectId)) {
+        console.warn('WARNING: Supabase Client URL does not match Project ID!', {
+          clientUrl: supabase.supabaseUrl,
+          projectId
+        });
+      }
+
+      const returnUrl = window.location.href;
+      console.log('Return URL:', returnUrl);
+
+      const fetchUrl = `https://${projectId}.supabase.co/functions/v1/calendar-auth/url?return_url=${encodeURIComponent(returnUrl)}`;
+      console.log('Fetching:', fetchUrl);
+
+      const response = await fetch(fetchUrl, {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': publicAnonKey,
+          'Content-Type': 'application/json' // Adding Content-Type just in case
         }
       });
 

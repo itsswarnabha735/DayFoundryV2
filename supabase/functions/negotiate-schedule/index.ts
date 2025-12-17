@@ -1,8 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { validateRequiredFields, validateTimezone, validateLLMResponse, GuardrailViolationError } from "../_shared/validation-helpers.ts";
-import { callGeminiWithRetry, handleLLMError } from "../_shared/error-recovery.ts";
+import { validateRequiredFields, validateTimezone } from "../_shared/validation-helpers.ts";
+import { handleLLMError } from "../_shared/error-recovery.ts";
 import { logger } from "../_shared/logger.ts";
+import { getDayScheduleContext } from "../_shared/schedule-helper.ts";
+import { runNegotiator } from "./logic.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -19,6 +21,12 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_URL") ?? "",
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
+
+        const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+        if (!GEMINI_API_KEY) {
+            logger.error('negotiator', 'GEMINI_API_KEY not configured', null);
+            throw new Error("GEMINI_API_KEY is not set");
+        }
 
         const { alert_id, user_id, timezone } = await req.json();
 
@@ -49,131 +57,59 @@ serve(async (req) => {
                 .select("*")
                 .in("id", alert.related_block_ids);
             conflictingBlocks = blocks || [];
-
-            if (conflictingBlocks.length === 0) {
-                logger.warn('negotiator', 'Orphaned block IDs in alert', {
-                    alert_id,
-                    blockIds: alert.related_block_ids
-                });
-            }
         }
 
-        logger.info('negotiator', 'Loaded conflict context', {
-            alert_id,
-            conflictingBlocksCount: conflictingBlocks.length
-        });
+        logger.info('negotiator', 'Loaded conflict context', { alert_id, conflictingBlocksCount: conflictingBlocks.length });
 
-        const formatTime = (dateStr: string) => {
-            return new Date(dateStr).toLocaleTimeString('en-US', {
-                timeZone: validatedTimezone,
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-            });
-        };
-
-        // 3. Agentic Negotiation (Gemini)
-        const prompt = `
-      You are the Negotiator Agent for a daily schedule.
-      A conflict has been detected: "${alert.message}"
-      
-      CONFLICTING BLOCKS:
-      ${JSON.stringify(conflictingBlocks.map(b => ({
-            title: b.title,
-            start: formatTime(b.start_time),
-            end: formatTime(b.end_time),
-            type: b.block_type
-        })))}
-      
-      YOUR GOAL:
-      Propose EXACTLY 3 distinct strategies to resolve this conflict.
-      - Strategy 1: The "Hard" Choice (e.g., Decline meeting, Cancel task).
-      - Strategy 2: The "Compromise" (e.g., Shorten duration, Move to later).
-      - Strategy 3: The "Reschedule" (e.g., Move conflicting block to tomorrow).
-      
-      OUTPUT JSON:
-      {
-        "strategies": [
-          {
-            "id": "strategy_1",
-            "title": "Short Title (e.g. 'Move Deep Work')",
-            "description": "One sentence explanation.",
-            "impact": "High" | "Medium" | "Low",
-            "action": "move" | "shorten" | "delete" | "split",
-            "operations": [
-              {
-                "type": "move",
-                "targetBlockId": "string (title of block to move)",
-                "params": { "shiftMinutes": 30 }
-              },
-              {
-                "type": "resize",
-                "targetBlockId": "string (title of block to resize)",
-                "params": { "durationMinutes": 60 }
-              },
-              {
-                "type": "delete",
-                "targetBlockId": "string (title of block to delete)"
-              }
-            ]
-          },
-          {
-            "id": "strategy_2",
-            ...
-          },
-          {
-            "id": "strategy_3",
-            ...
-          }
-        ]
-      }
-    `;
-
-        const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-        if (!GEMINI_API_KEY) {
-            logger.error('negotiator', 'GEMINI_API_KEY not configured', null);
-            throw new Error("GEMINI_API_KEY is not set");
+        // 3. Fetch Full Day Context (Shared Helper) - The "Board"
+        // Use the date of the first conflicting block, or today if none
+        let targetDate = new Date();
+        if (conflictingBlocks.length > 0) {
+            targetDate = new Date(conflictingBlocks[0].start_time);
         }
 
-        // GUARDRAIL: Use retry logic (FM.1, FM.2, FM.3)
-        const geminiData = await callGeminiWithRetry(
-            GEMINI_API_KEY,
-            'gemini-1.5-flash',
-            prompt,
-            {
-                responseMimeType: 'application/json',
-                agentName: 'negotiator'
-            }
+        const { userPrefs, freeSlots } = await getDayScheduleContext(
+            supabaseClient,
+            user_id,
+            targetDate,
+            validatedTimezone
         );
 
-        const generatedText = geminiData.candidates[0].content.parts[0].text;
-        const result = JSON.parse(generatedText);
+        const isProModel = (userPrefs as any)?.ai_preferences?.model === 'pro';
+        const modelName = isProModel ? 'gemini-3.0-pro-preview' : 'gemini-2.0-flash-exp';
 
-        // GUARDRAIL: Validate response structure (G3.1, GX.10)
-        validateLLMResponse(result, {
-            requiredFields: ['strategies'],
-            arrayFields: [{ field: 'strategies', minLength: 3, maxLength: 3 }]
+        logger.info('negotiator', `Using model: ${modelName}`, { isProModel });
+
+        // 4. Agentic Negotiation (Extracted Logic)
+        const result = await runNegotiator({
+            alert,
+            conflictingBlocks,
+            freeSlots,
+            userPrefs,
+            timezone: validatedTimezone,
+            geminiApiKey: GEMINI_API_KEY
         });
-
-        // Additional validation: Check each strategy has required fields
-        for (const strategy of result.strategies) {
-            if (!strategy.id || !strategy.title || !strategy.description || !strategy.impact || !strategy.action) {
-                throw new GuardrailViolationError(
-                    'Strategy missing required fields',
-                    'INVALID_STRATEGY_STRUCTURE',
-                    { strategy }
-                );
-            }
-            // Ensure operations array exists (even if empty)
-            if (!strategy.operations || !Array.isArray(strategy.operations)) {
-                strategy.operations = [];
-            }
-        }
 
         logger.info('negotiator', 'Strategies generated successfully', {
             alert_id,
             strategyCount: result.strategies.length
         });
+
+        // 5. Record Decision Context (Phase 2)
+        try {
+            const { recordDecision } = await import('../_shared/context-helper.ts');
+            await recordDecision(
+                supabaseClient,
+                user_id,
+                'negotiator',
+                'conflict_resolution_generated',
+                { alert_id, conflict_count: conflictingBlocks.length, timezone: validatedTimezone },
+                result.strategies,
+                null // No choice made yet
+            );
+        } catch (e) {
+            logger.warn('negotiator', 'Failed to record context', e);
+        }
 
         return new Response(JSON.stringify({ success: true, strategies: result.strategies }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" }

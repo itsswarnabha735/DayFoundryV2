@@ -1,16 +1,28 @@
 import { useState, useCallback } from 'react';
 import { ResilientEdgeFunctionService } from '../utils/services/EdgeFunctionService';
-import { useDataStore } from './useSimpleDataStore';
+import { authManager } from '../utils/auth';
+import { supabase } from '../utils/supabase/client';
 
 export function useEdgeFunctions() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { authManager } = useDataStore();
 
   const createServiceWithAuth = useCallback(async () => {
-    const token = authManager.getAccessToken();
-    return new ResilientEdgeFunctionService(token || undefined);
-  }, [authManager]);
+    // Try to get token from authManager first
+    let token = authManager.getAccessToken();
+
+    // Fallback: get fresh session from supabase if authManager doesn't have token
+    if (!token) {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token || null;
+    }
+
+    if (!token) {
+      throw new Error('Not authenticated - please sign in');
+    }
+
+    return new ResilientEdgeFunctionService(token);
+  }, []);
 
   const extractTask = useCallback(async (rawText: string) => {
     setIsLoading(true);

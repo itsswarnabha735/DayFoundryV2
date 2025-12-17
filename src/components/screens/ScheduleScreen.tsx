@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, MoreHorizontal, Lightbulb, Pin, Calendar, MapPin, Clock, RefreshCw, Users, AlertTriangle, Car, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MoreHorizontal, Lightbulb, Pin, Calendar, MapPin, Clock, RefreshCw, Users, AlertTriangle, ShieldCheck, Car, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { MeetingsScreen } from './MeetingsScreen';
 import { Button } from '../ui/button';
@@ -22,7 +22,10 @@ import { ErrandsPlanner } from '../errands/ErrandsPlanner';
 import { AddErrandForm } from '../errands/AddErrandForm';
 import { formatTimeFromDate, timeToMinutes, formatRelativeTime } from '../../utils/timeFormat';
 import { getDataStore } from '../../utils/data/store';
-import { generateId } from '../../utils/uuid';
+import { ValidationReportSheet, ValidationReport } from '../schedule/ValidationReportSheet';
+import { generateId } from '../../utils/uuid'; // Moved generateId to top lvl if not already there, assuming it was imported. 
+// Just ensuring import of ValidationReportSheet
+
 
 // Import ErrandBundle type - we need to add this after the ErrandsPlanner component
 interface ErrandBundle {
@@ -54,7 +57,7 @@ interface ErrandBundle {
 export interface ScheduleBlock {
   id: string;
   title: string;
-  type: 'deep' | 'meeting' | 'admin' | 'errand' | 'buffer' | 'micro-break' | 'calendar' | 'travel';
+  type: 'deep' | 'meeting' | 'admin' | 'errand' | 'buffer' | 'micro-break' | 'calendar' | 'travel' | 'prep' | 'debrief';
   startTime: string; // Format: "HH:MM"
   endTime: string;   // Format: "HH:MM"
   isPinned: boolean;
@@ -69,6 +72,8 @@ export interface ScheduleBlock {
   taskId?: string;
   eventId?: string;
   priority?: 'high' | 'medium' | 'low';
+  justification?: string;
+  tasks?: Array<{ id: string; logic: string; }>;
 }
 
 interface CalendarEvent {
@@ -108,6 +113,7 @@ export function ScheduleScreen() {
   }, []);
 
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
+  const [selectedBlock, setSelectedBlock] = useState<ScheduleBlock | null>(null);
 
   const [isComposing, setIsComposing] = useState(false);
   const [showExplainPanel, setShowExplainPanel] = useState(false);
@@ -220,25 +226,31 @@ export function ScheduleScreen() {
   const allBlocks = [...blocks, ...getCalendarBlocks()]
     .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
 
-  const checkForConflicts = () => {
-    const detector = createConflictDetector({
-      workingHours: { start: '09:00', end: '17:00' },
-      minimumBufferBetweenMeetings: 15,
-      maxDeepWorkDuration: 120,
-      considerEnergyLevels: true
-    });
+  const checkForConflicts = async () => {
+    if (!user) return;
 
-    const detectedConflicts = detector.detectConflicts(allBlocks);
+    // Check for pending server-side alerts (Guardian Agent)
+    const { data: alerts, error } = await supabase
+      .from('schedule_alerts')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-    // Only show modal for medium to high severity conflicts
-    const significantConflicts = detectedConflicts.filter(
-      c => c.severity === 'medium' || c.severity === 'high'
-    );
+    if (error) {
+      console.error('Error checking for conflicts:', error);
+      toast.error('Failed to check for conflicts');
+      return;
+    }
 
-    if (significantConflicts.length > 0) {
-      setConflicts(significantConflicts);
-      setShowConflictModal(true);
+    if (alerts && alerts.length > 0) {
+      const alert = alerts[0];
+      handleAlertAction(alert, 'resolve');
     } else {
+      toast.success('No system conflicts detected', {
+        description: 'Your schedule looks good according to the Guardian Agent.'
+      });
       setConflicts([]);
     }
   };
@@ -336,7 +348,31 @@ export function ScheduleScreen() {
       });
       console.log('Debug: Blocks for date', dateStr, ':', daysBlocks);
 
+
       if (daysBlocks.length > 0) {
+        // Map database block types back to UI block types
+        // DB uses deep_work, micro_break etc. but UI uses deep, micro-break
+        const mapDbTypeToUi = (dbType: string): ScheduleBlock['type'] => {
+          const typeMap: Record<string, ScheduleBlock['type']> = {
+            'deep_work': 'deep',
+            'deep': 'deep',
+            'meeting': 'meeting',
+            'admin': 'admin',
+            'buffer': 'buffer',
+            'break': 'buffer', // map break to buffer for display
+            'micro_break': 'micro-break',
+            'micro-break': 'micro-break',
+            'errand': 'errand',
+            'travel': 'travel',
+            'prep': 'prep',
+            'debrief': 'debrief',
+            'task': 'admin', // fallback task to admin styling
+            'focus_session': 'deep', // focus sessions are deep work
+            'calendar': 'calendar',
+          };
+          return typeMap[dbType] || 'admin' as ScheduleBlock['type']; // Default to admin if unknown
+        };
+
         // Map DataStore blocks (ISO strings) to UI blocks (HH:MM)
         const mappedBlocks: ScheduleBlock[] = daysBlocks.map(b => {
           // Use live DB column names with fallback to new column names
@@ -344,7 +380,7 @@ export function ScheduleScreen() {
           const end = new Date(b.end_time || b.end_at);
           return {
             id: b.id,
-            type: b.block_type as BlockType,
+            type: mapDbTypeToUi(b.block_type),
             startTime: `${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')}`,
             endTime: `${end.getHours().toString().padStart(2, '0')}:${end.getMinutes().toString().padStart(2, '0')}`,
             isPinned: b.is_pinned ?? b.pinned ?? false,
@@ -352,7 +388,8 @@ export function ScheduleScreen() {
             taskId: b.task_id,
             eventId: b.event_id,
             isSynced: true,
-            priority: b.task_id ? (data.tasks.find(t => t.id === b.task_id)?.priority as any) : undefined
+            priority: b.task_id ? (data.tasks.find(t => t.id === b.task_id)?.priority as any) : undefined,
+            justification: b.rationale
           };
         });
         setBlocks(mappedBlocks);
@@ -387,7 +424,7 @@ export function ScheduleScreen() {
       console.log(`Deleted ${blocksForDate.length} existing blocks for ${dateStr}`);
 
       // Map LLM block types to valid database block types
-      // Valid types per CHECK constraint: task, meeting, deep_work, admin, buffer, break, errand, travel, focus_session
+      // Valid types per CHECK constraint: task, meeting, deep_work, admin, buffer, break, errand, travel, prep, debrief, focus_session
       const mapBlockType = (uiType: string): string => {
         const typeMap: Record<string, string> = {
           'deep': 'deep_work',
@@ -396,11 +433,12 @@ export function ScheduleScreen() {
           'admin': 'admin',
           'buffer': 'buffer',
           'break': 'break',
-          'micro_break': 'break',  // Map to valid 'break'
+          'micro-break': 'micro_break',
+          'micro_break': 'micro_break',
           'errand': 'errand',
           'travel': 'travel',
-          'prep': 'task',          // Map to valid 'task'
-          'debrief': 'task',       // Map to valid 'task'
+          'prep': 'prep',
+          'debrief': 'debrief',
           'task': 'task',
           'focus_session': 'focus_session',
         };
@@ -427,7 +465,8 @@ export function ScheduleScreen() {
           end_time: endDate.toISOString(),
           title: b.title,  // NOT NULL in DB
           is_pinned: b.isPinned ?? false,
-          task_id: b.taskId || null
+          task_id: b.taskId || null,
+          rationale: b.justification
         };
       });
 
@@ -446,8 +485,49 @@ export function ScheduleScreen() {
   };
 
   const [activeAlertId, setActiveAlertId] = useState<string | undefined>(undefined);
+  const [pendingAlert, setPendingAlert] = useState<any>(null);
 
-  // Listen for Agentic Alerts (Guardian)
+  // Helper function to handle an alert
+  const handleAlertAction = (alert: any, action: 'resolve' | 'dismiss') => {
+    if (action === 'resolve') {
+      setActiveAlertId(alert.id);
+      setShowConflictModal(true);
+    } else {
+      supabase.from('schedule_alerts').update({ status: 'dismissed' }).eq('id', alert.id);
+      setPendingAlert(null);
+    }
+  };
+
+  // Fetch existing pending alerts on mount
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchPendingAlerts = async () => {
+      const { data: alerts, error } = await supabase
+        .from('schedule_alerts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!error && alerts && alerts.length > 0) {
+        const alert = alerts[0];
+        setPendingAlert(alert);
+        toast.warning(`⚠️ ${alert.type.toUpperCase()}: ${alert.message}`, {
+          duration: 10000,
+          action: {
+            label: 'Resolve',
+            onClick: () => handleAlertAction(alert, 'resolve')
+          }
+        });
+      }
+    };
+
+    fetchPendingAlerts();
+  }, [user]);
+
+  // Listen for NEW Agentic Alerts (Guardian) via realtime
   useEffect(() => {
     if (!user) return;
 
@@ -463,18 +543,16 @@ export function ScheduleScreen() {
         },
         (payload) => {
           console.log('New Alert received:', payload);
-          const alert = payload.new;
+          const alert = payload.new as any;
           if (alert.status === 'pending') {
-            // Show toast or banner
-            // For now, using a simple alert, but ideally use a Toast component
-            const shouldHeal = window.confirm(`⚠️ ${alert.type.toUpperCase()}: ${alert.message}\n\nDo you want to negotiate a solution?`);
-            if (shouldHeal) {
-              setActiveAlertId(alert.id);
-              setShowConflictModal(true);
-              // Mark alert as viewed/processing?
-            } else {
-              supabase.from('schedule_alerts').update({ status: 'dismissed' }).eq('id', alert.id);
-            }
+            setPendingAlert(alert);
+            toast.warning(`⚠️ ${alert.type.toUpperCase()}: ${alert.message}`, {
+              duration: 15000,
+              action: {
+                label: 'Resolve',
+                onClick: () => handleAlertAction(alert, 'resolve')
+              }
+            });
           }
         }
       )
@@ -490,6 +568,8 @@ export function ScheduleScreen() {
   };
 
   const [agentReasoning, setAgentReasoning] = useState<string | undefined>(undefined);
+  const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
+  const [showValidationSheet, setShowValidationSheet] = useState(false);
 
   const handleComposeDay = async (additionalConstraints?: string) => {
     setIsComposing(true);
@@ -503,12 +583,23 @@ export function ScheduleScreen() {
         return;
       }
 
+      // Get user's access token for proper RLS authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        console.error('Session error:', sessionError);
+        alert('Please sign in to compose your schedule.');
+        return;
+      }
+
+      console.log('Sending token:', session.access_token.substring(0, 10) + '...');
+
       // Call Agentic Scheduler (LLM)
       const response = await fetch(`https://${projectId}.supabase.co/functions/v1/compose-day-llm`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${publicAnonKey}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           date: selectedDate.toISOString(),
@@ -537,11 +628,13 @@ export function ScheduleScreen() {
 
       const result = await response.json();
 
-      if (result.success && result.optimizedBlocks) {
+      if (result && result.success && result.optimizedBlocks) {
         // Assign temp IDs to new blocks if missing
         const blocksWithIds = result.optimizedBlocks.map((b: any) => ({
           ...b,
-          id: b.id || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          id: b.id || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          justification: b.reason,
+          tasks: b.tasks // Map detailed tasks logic
         }));
 
         // Update blocks with optimized schedule
@@ -554,8 +647,18 @@ export function ScheduleScreen() {
         await saveScheduleToDatabase(blocksWithIds);
 
         // Update UI with reasoning
+        // Update UI with reasoning
         setScheduleChanges([]); // Clear old changes format as we use reasoning now
         setAgentReasoning(result.reasoning);
+
+        // Capture Validation Report
+        if (result.validationReport) {
+          setValidationReport(result.validationReport);
+          // Optional: Auto-open if accuracy is low? For now, just set state.
+        } else {
+          setValidationReport(null);
+        }
+
         setShowExplainPanel(true);
       } else {
         console.error('Schedule solve returned error:', result.error);
@@ -619,38 +722,40 @@ export function ScheduleScreen() {
   };
 
   const getUnscheduledTasks = () => {
-    const scheduledTaskIds = blocks
-      .filter(b => b.type === 'deep' || b.type === 'admin')
-      .map(b => b.id);
+    // Collect all task IDs that are currently scheduled in any block
+    const scheduledTaskIds = new Set(blocks
+      .flatMap(b => {
+        const ids: string[] = [];
+        if (b.taskId) ids.push(b.taskId);
+        // @ts-ignore - Handle potential snake_case from raw LLM or DB data
+        if (b.task_id) ids.push(b.task_id);
+        if (b.tasks) ids.push(...b.tasks.map(t => t.id));
+        return ids;
+      }));
 
-    return data.tasks.filter(task =>
-      !task.steps.every(step => step.completed) &&
-      !scheduledTaskIds.includes(task.id)
-    );
+    // Filter tasks that are incomplete and NOT in the scheduled set
+    return data.tasks.filter(task => {
+      // If task is completed, it's not unscheduled (it's done)
+      if (task.steps.every(step => step.completed)) return false;
+
+      // If ID is found in blocks, it's scheduled
+      if (scheduledTaskIds.has(task.id)) return false;
+
+      // Fallback: Check if any block title contains the task title (fuzzy match)
+      // This handles cases where ID linkage might be lost (e.g. multi-task blocks not fully persisted) 
+      // but visually the task is on the schedule.
+      const isVisuallyScheduled = blocks.some(b =>
+        b.title.toLowerCase().trim().includes(task.title.toLowerCase().trim()) ||
+        (b.description && b.description.toLowerCase().includes(task.title.toLowerCase()))
+      );
+
+      if (isVisuallyScheduled) return false;
+
+      return true;
+    });
   };
 
-  const createTestConflict = () => {
-    // Create sample conflicts for testing
-    const testConflicts: ConflictDetection[] = [
-      {
-        conflictType: 'overlap',
-        severity: 'high',
-        affectedBlocks: [blocks[0], blocks[1]], // Use existing blocks
-        description: 'Deep work session overlaps with team standup by 30 minutes',
-        estimatedDelay: 30
-      },
-      {
-        conflictType: 'overrun',
-        severity: 'medium',
-        affectedBlocks: [blocks[4]], // Focused development
-        description: 'Extended work session exceeds recommended 2-hour limit',
-        estimatedDelay: 0
-      }
-    ];
 
-    setConflicts(testConflicts);
-    setShowConflictModal(true);
-  };
 
   const handleErrandBundleCreated = (bundle: ErrandBundle) => {
     // Create errand blocks from the bundle
@@ -706,219 +811,169 @@ export function ScheduleScreen() {
     saveScheduleToDatabase([...blocks, ...errandBlocks]);
   };
 
+  const handleBlockClick = (block: ScheduleBlock) => {
+    // Only show justification if available and not a purely read-only calendar event
+    // We allow clicking if it has a justification, even if it might be marked read-only for some reason
+    if (block.justification) {
+      setSelectedBlock(block);
+    }
+  };
+
   if (showMeetings) {
     return <MeetingsScreen onBack={() => setShowMeetings(false)} />;
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-y-auto">
       {/* Top App Bar - Mobile Responsive */}
+      {/* Clean Modern Header */}
       <div
-        className="flex flex-col px-3 py-2 border-b"
-        style={{
-          backgroundColor: 'var(--df-surface)',
-          borderBottomColor: 'var(--df-border)',
-          paddingTop: 'calc(env(safe-area-inset-top, 0) + 8px)',
-        }}
+        className="px-5 pt-6 pb-2 sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-black/5"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0) + 16px)' }}
       >
-        {/* First Row: Title and Date Navigation */}
-        <div className="flex items-center justify-between gap-2 mb-2">
-          {/* Left: Title */}
-          <div className="flex items-center gap-1 shrink-0">
-            <h1 className="text-lg font-bold" style={{ color: 'var(--df-text)' }}>Schedule</h1>
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--df-text)]">
+              {selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </h1>
+            <div className="text-sm text-[var(--df-text-muted)] mt-0.5 flex items-center gap-1.5">
+              <span>Today's Plan</span>
+              <span className="w-1 h-1 rounded-full bg-[var(--df-text-muted)] opacity-40"></span>
+              <span>{allBlocks.length} events</span>
+            </div>
           </div>
 
-          {/* Center: Date Navigation */}
-          <div className="flex items-center gap-0.5 flex-1 justify-center">
-            <Button
-              variant="ghost"
-              size="icon"
+          <div className="flex items-center gap-1">
+            <button
               onClick={() => navigateDate('prev')}
-              className="h-8 w-8"
-              style={{ color: 'var(--df-text-muted)' }}
+              className="p-1.5 rounded-full hover:bg-black/5 text-[var(--df-text-muted)] transition-colors"
             >
-              <ChevronLeft size={16} />
-            </Button>
+              <ChevronLeft size={20} />
+            </button>
 
-            <span
-              className="text-sm font-medium text-center whitespace-nowrap"
-              style={{ color: 'var(--df-text)', minWidth: '100px' }}
+            <button
+              onClick={() => setSelectedDate(new Date())}
+              className="p-1.5 rounded-full hover:bg-black/5 text-[var(--df-text-muted)] transition-colors"
+              title="Today"
             >
-              {formattedDate}
-            </span>
+              <Calendar size={20} />
+            </button>
 
-            <Button
-              variant="ghost"
-              size="icon"
+            <button
               onClick={() => navigateDate('next')}
-              className="h-8 w-8"
-              style={{ color: 'var(--df-text-muted)' }}
+              className="p-1.5 rounded-full hover:bg-black/5 text-[var(--df-text-muted)] transition-colors"
             >
-              <ChevronRight size={16} />
-            </Button>
+              <ChevronRight size={20} />
+            </button>
           </div>
+        </div>
 
-          {/* Right: Conflict check button */}
+        {/* Action Toolbar */}
+        <div className="flex items-center justify-end gap-2 pb-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowMeetings(true)}
+            className="h-8 w-8 text-[var(--df-text-muted)] hover:text-[var(--df-primary)] transition-colors"
+            title="Meetings"
+          >
+            <Users size={18} />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowErrandsSheet(true)}
+            className="h-8 w-8 text-[var(--df-text-muted)] hover:text-[var(--df-primary)] transition-colors"
+            title="Errands"
+            style={{ color: showErrandsSheet ? 'var(--df-primary)' : undefined }}
+          >
+            <Car size={18} />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={loadCalendarEvents}
+            disabled={isLoadingCalendar}
+            className="h-8 w-8 text-[var(--df-text-muted)] hover:text-[var(--df-primary)] transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw size={18} className={isLoadingCalendar ? 'animate-spin' : ''} />
+          </Button>
+
           <Button
             variant="ghost"
             size="icon"
             onClick={() => checkForConflicts()}
-            className="h-8 w-8 shrink-0"
-            style={{ color: 'var(--df-text-muted)' }}
+            className="h-8 w-8 text-[var(--df-text-muted)] hover:text-red-500 transition-colors"
+            title="Check Conflicts"
           >
-            <AlertTriangle className="w-4 h-4" />
+            <AlertTriangle size={18} />
           </Button>
-        </div>
-
-        {/* Second Row: Status & Actions */}
-        <div className="flex items-center justify-between gap-2">
-          {/* Calendar Status Chip */}
-          <Badge
-            variant="outline"
-            className="flex items-center gap-1 text-xs px-2 py-1"
-            style={{
-              borderColor: isLoadingCalendar
-                ? 'var(--df-primary)'
-                : calendarLastRefreshed
-                  ? 'var(--df-success)'
-                  : 'var(--df-text-muted)',
-              color: isLoadingCalendar
-                ? 'var(--df-primary)'
-                : calendarLastRefreshed
-                  ? 'var(--df-success)'
-                  : 'var(--df-text-muted)',
-              fontSize: '11px'
-            }}
-          >
-            {isLoadingCalendar ? (
-              <RefreshCw size={10} className="animate-spin" />
-            ) : (
-              <Calendar size={10} />
-            )}
-            <span className="hidden sm:inline">
-              {isLoadingCalendar
-                ? 'Syncing...'
-                : calendarLastRefreshed
-                  ? formatLastRefreshed(calendarLastRefreshed)
-                  : 'No calendar'
-              }
-            </span>
-            <span className="sm:hidden">
-              {isLoadingCalendar ? '...' : calendarLastRefreshed ? '✓' : '—'}
-            </span>
-          </Badge>
-
-          {/* Action Buttons - compact row */}
-          <div className="flex items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowMeetings(true)}
-              className="h-7 w-7"
-              style={{ color: 'var(--df-text-muted)' }}
-              title="Meetings"
-            >
-              <Users size={14} />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowErrandsSheet(true)}
-              className="h-7 w-7"
-              style={{ color: showErrandsSheet ? 'var(--df-primary)' : 'var(--df-text-muted)' }}
-              title="Errands Planner"
-            >
-              <Car size={14} />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={loadCalendarEvents}
-              disabled={isLoadingCalendar}
-              className="h-7 w-7"
-              style={{ color: 'var(--df-text-muted)' }}
-              title="Refresh Calendar"
-            >
-              <RefreshCw size={14} className={isLoadingCalendar ? 'animate-spin' : ''} />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={addTestEvent}
-              className="h-7 w-7"
-              style={{ color: 'var(--df-primary)' }}
-              title="Add Test Event"
-            >
-              <Calendar size={14} />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={createTestConflict}
-              className="h-7 w-7"
-              style={{ color: 'var(--df-warning)' }}
-              title="Test Conflict"
-            >
-              <AlertTriangle size={12} />
-            </Button>
-          </div>
         </div>
       </div>
 
-      {/* Compose Day Button */}
-      <div
-        className="px-4 py-3 border-b"
-        style={{
-          backgroundColor: 'var(--df-surface)',
-          borderBottomColor: 'var(--df-border)'
-        }}
-      >
-        <Button
+      <div className="px-4 py-4 space-y-4">
+        {/* Intelligent Compose Card */}
+        {/* Only show if we are likely in a planning state or have unscheduled tasks */}
+        {/* Intelligent Compose Card */}
+        <div
+          className="relative overflow-hidden rounded-xl p-0 shadow-sm border border-slate-200 bg-white group cursor-pointer transition-all hover:shadow-md"
           onClick={() => handleComposeDay()}
-          disabled={isComposing}
-          className="w-full"
-          style={{
-            backgroundColor: 'var(--df-primary)',
-            color: 'var(--df-primary-contrast)',
-            minHeight: '48px',
-            fontSize: 'var(--df-type-body-size)',
-            fontWeight: 'var(--df-type-body-weight)'
-          }}
         >
-          {isComposing ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-              Composing Day...
-            </>
-          ) : (
-            <>
-              <Calendar size={20} className="mr-2" />
-              Compose Day
-            </>
-          )}
-        </Button>
+          {/* Accent Bar */}
+          <div className={`h-1 w-full ${getUnscheduledTasks().length > 0 ? 'bg-orange-500' : 'bg-purple-600'}`}></div>
 
-        {getUnscheduledTasks().length > 0 && (
-          <Alert className="mt-3" style={{ backgroundColor: 'var(--df-surface-alt)', borderColor: 'var(--df-border)' }}>
-            <Lightbulb size={16} />
-            <AlertDescription style={{ color: 'var(--df-text-muted)', fontSize: 'var(--df-type-caption-size)' }}>
-              {getUnscheduledTasks().length} unscheduled tasks available for planning
-            </AlertDescription>
-          </Alert>
+          <div className="p-4 flex items-center justify-between">
+            <div className="flex-1 min-w-0 pr-4">
+              <div className="flex items-center gap-2 mb-1">
+                {isComposing ? (
+                  <RefreshCw className="animate-spin text-purple-600" size={18} />
+                ) : (
+                  <Lightbulb size={18} className={getUnscheduledTasks().length > 0 ? "text-orange-500 fill-orange-500" : "text-purple-600"} />
+                )}
+                <h3 className="font-semibold text-slate-900 text-base">
+                  {getUnscheduledTasks().length > 0 ? "Unscheduled Tasks Pending" : "Optimize Schedule"}
+                </h3>
+              </div>
+
+              <p className="text-slate-500 text-sm leading-relaxed">
+                {getUnscheduledTasks().length > 0
+                  ? `${getUnscheduledTasks().length} tasks need time slots. Tap to auto-assign.`
+                  : "Your day looks planned. Tap to re-optimize flow."
+                }
+              </p>
+            </div>
+
+            <div className={`h-10 w-10 flex items-center justify-center rounded-full shrink-0 ${getUnscheduledTasks().length > 0 ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'}`}>
+              <div className="font-bold text-xl leading-none">→</div>
+            </div>
+          </div>
+        </div>
+
+
+
+        {/* Validation / Status alerts could go here as smaller pills */}
+        {validationReport && validationReport.accuracy < 90 && (
+          <div
+            onClick={() => setShowValidationSheet(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-sm border border-orange-100 cursor-pointer"
+          >
+            <ShieldCheck size={14} />
+            <span className="font-medium">Guardrails Audit: {validationReport.accuracy}%</span>
+          </div>
         )}
       </div>
 
 
       {/* Timeline */}
-      <div className="flex-1 relative">
+      <div className="">
         <TimelineGrid
           blocks={allBlocks}
           onBlockResize={handleBlockResize}
           onTogglePin={togglePin}
+          onBlockClick={handleBlockClick}
           conflicts={conflicts}
           startHour={6}
           endHour={22}
@@ -936,7 +991,11 @@ export function ScheduleScreen() {
               Review the optimizations made to your schedule
             </SheetDescription>
           </SheetHeader>
-          <ExplainPanel changes={scheduleChanges} reasoning={agentReasoning} />
+          <ExplainPanel
+            changes={scheduleChanges}
+            reasoning={agentReasoning}
+            proposedBlocks={blocks}
+          />
         </SheetContent>
       </Sheet>
 
@@ -955,10 +1014,14 @@ export function ScheduleScreen() {
       {/* Conflict Resolution Modal */}
       <ConflictResolutionModal
         isOpen={showConflictModal}
-        onClose={() => setShowConflictModal(false)}
+        onClose={() => {
+          setShowConflictModal(false);
+          setActiveAlertId(undefined);
+        }}
         conflicts={conflicts}
         currentBlocks={allBlocks}
         onApplyStrategy={handleApplyStrategy}
+        alertId={activeAlertId}
       />
 
       {/* Errands Planner Sheet */}
@@ -980,6 +1043,34 @@ export function ScheduleScreen() {
           />
         </SheetContent>
       </Sheet>
+
+      {/* Block Justification Sheet */}
+      <Sheet open={!!selectedBlock} onOpenChange={(open: boolean) => !open && setSelectedBlock(null)}>
+        <SheetContent side="bottom">
+          <SheetHeader>
+            <SheetTitle>{selectedBlock?.title}</SheetTitle>
+            <SheetDescription className="capitalize">
+              {selectedBlock?.type} Block
+            </SheetDescription>
+          </SheetHeader>
+          <div className="py-6">
+            <div className="flex items-start gap-3">
+              <Lightbulb className="w-5 h-5 text-yellow-500 mt-0.5 shrink-0" />
+              <div>
+                <h4 className="text-sm font-medium mb-1 text-[var(--df-text)]">Why this time?</h4>
+                <p className="text-sm text-[var(--df-text-muted)] leading-relaxed">
+                  {selectedBlock?.justification || "Optimized based on your energy levels and constraints."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+      <ValidationReportSheet
+        open={showValidationSheet}
+        onOpenChange={setShowValidationSheet}
+        report={validationReport}
+      />
     </div>
   );
 }

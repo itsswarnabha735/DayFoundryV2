@@ -24,10 +24,14 @@ export interface UserPreferences {
 
     // Scheduling
     conflictResolutionStyle: 'aggressive' | 'balanced' | 'conservative';
+    autoResolveConflicts: boolean;
+    preferredResolutionStrategy: string;
 
+    // System
     // System
     notificationsEnabled: boolean;
     timezone: string;
+    aiPreferences: { model: 'standard' | 'pro' };
 }
 
 /**
@@ -42,8 +46,11 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
     interruptionBudget: 3,
     noMeetingWindows: [],
     conflictResolutionStyle: 'balanced',
+    autoResolveConflicts: false,
+    preferredResolutionStrategy: 'protect_focus',
     notificationsEnabled: false,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    aiPreferences: { model: 'standard' }
 };
 
 /**
@@ -85,8 +92,11 @@ function mapFromDatabase(row: any): UserPreferences {
         interruptionBudget: row.interruption_budget ?? DEFAULT_PREFERENCES.interruptionBudget,
         noMeetingWindows: row.no_meeting_windows || DEFAULT_PREFERENCES.noMeetingWindows,
         conflictResolutionStyle: row.conflict_resolution_style || DEFAULT_PREFERENCES.conflictResolutionStyle,
+        autoResolveConflicts: row.auto_resolve_conflicts ?? DEFAULT_PREFERENCES.autoResolveConflicts,
+        preferredResolutionStrategy: row.preferred_resolution_strategy || DEFAULT_PREFERENCES.preferredResolutionStrategy,
         notificationsEnabled: row.notifications_enabled ?? DEFAULT_PREFERENCES.notificationsEnabled,
-        timezone: row.timezone || DEFAULT_PREFERENCES.timezone
+        timezone: row.timezone || DEFAULT_PREFERENCES.timezone,
+        aiPreferences: row.ai_preferences || DEFAULT_PREFERENCES.aiPreferences
     };
 }
 
@@ -104,8 +114,11 @@ function mapToDatabase(prefs: Partial<UserPreferences>): Record<string, any> {
     if (prefs.interruptionBudget !== undefined) result.interruption_budget = prefs.interruptionBudget;
     if (prefs.noMeetingWindows !== undefined) result.no_meeting_windows = prefs.noMeetingWindows;
     if (prefs.conflictResolutionStyle !== undefined) result.conflict_resolution_style = prefs.conflictResolutionStyle;
+    if (prefs.autoResolveConflicts !== undefined) result.auto_resolve_conflicts = prefs.autoResolveConflicts;
+    if (prefs.preferredResolutionStrategy !== undefined) result.preferred_resolution_strategy = prefs.preferredResolutionStrategy;
     if (prefs.notificationsEnabled !== undefined) result.notifications_enabled = prefs.notificationsEnabled;
     if (prefs.timezone !== undefined) result.timezone = prefs.timezone;
+    if (prefs.aiPreferences !== undefined) result.ai_preferences = prefs.aiPreferences;
 
     result.updated_at = new Date().toISOString();
 
@@ -250,6 +263,7 @@ export function useUserPreferences() {
 
             // Convert to database format
             const dbUpdates = mapToDatabase(updates);
+            console.log('[DEBUG] Updating preferences:', dbUpdates);
 
             // Upsert to database
             const { error: updateError } = await supabase

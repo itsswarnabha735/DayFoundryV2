@@ -1,0 +1,51 @@
+Test Case ID,Test Case Name,Test Case Details,Test Case Expected Output,Test Case Accuracy
+TC001,"Simple Single Deep Work Task","Single deep work task with no conflicts","{""block_count"":1,""block_type"":""deep"",""min_duration_minutes"":120,""task_ids_included"":[""task-001""],""scheduled_in_morning"":true}",100%
+TC002,"Multiple Admin Tasks Bundling","3 admin tasks should be bundled into one admin block","{""block_count"":1,""block_type"":""admin"",""min_duration_minutes"":65,""task_ids_included"":[""task-002a"",""task-002b"",""task-002c""],""homogeneity_required"":true}",100%
+TC003,"Calendar Event Conflict Avoidance","Task should not overlap with existing calendar event","{""block_count"":1,""no_overlap_with_events"":true,""task_scheduled_after"":""10:00""}",100%
+TC004,"Mixed Task Types Separation","Deep work and admin tasks must be in separate blocks","{""block_count"":2,""blocks_are_homogeneous"":true,""deep_block_duration"":120,""admin_block_duration"":15}",50%
+TC005,"Single Errand Task","Errand task scheduled in appropriate slot","{""block_count"":1,""block_type"":""errand"",""min_duration_minutes"":45,""task_ids_included"":[""task-005""]}",100%
+TC006,"Meeting Task Recognition","Phone call correctly categorized as meeting","{""block_count"":1,""block_type"":""meeting"",""min_duration_minutes"":30,""task_ids_included"":[""task-006""]}",75%
+TC007,"Multiple Calendar Conflicts","Task navigates around multiple calendar events","{""block_count"":1,""no_overlap_with_events"":true,""fits_in_available_gaps"":true}",50%
+TC008,"Duration Range Parsing - Hours","1-2 hours range should allocate max duration","{""block_count"":1,""min_duration_minutes"":120,""uses_max_of_range"":true}",50%
+TC009,"Duration Range Parsing - Minutes","30-45 mins range should allocate max duration","{""block_count"":1,""min_duration_minutes"":45,""uses_max_of_range"":true}",100%
+TC010,"High Priority First Scheduling","High priority tasks scheduled before low priority","{""high_priority_scheduled_earlier"":true,""priority_order_respected"":true}",100%
+TC011,"Energy-Aware Deep Work Morning","Deep work task should be scheduled during high energy morning hours","{""scheduled_before_noon"":true,""block_type"":""deep"",""respects_energy_profile"":true}",100%
+TC012,"Admin Tasks in Afternoon","Low cognitive admin tasks scheduled in lower energy afternoon","{""scheduled_after_noon"":true,""block_type"":""admin"",""energy_appropriate"":true}",33%
+TC013,"Working Hours Start Boundary","No tasks scheduled before working hours start","{""all_blocks_start_after"":""10:00"",""respects_working_hours"":true}",100%
+TC014,"Working Hours End Boundary","No tasks scheduled after working hours end","{""all_blocks_end_before"":""17:00"",""respects_working_hours"":true}",100%
+TC015,"Break Insertion After Long Block","Break should be inserted after 90 minutes of work","{""includes_break_blocks"":true,""break_after_continuous_work"":90}",100%
+TC016,"All Four Task Types Together","Schedule with all four task categories handled correctly","{""block_count_min"":4,""all_categories_scheduled"":true,""no_mixed_type_blocks"":true}",100%
+TC017,"Full Day Calendar Blocked","Handle day completely blocked by calendar events","{""block_count"":0,""reasoning_mentions_no_availability"":true}",0%
+TC018,"Narrow Time Slot Fitting","Short task fits in narrow gap between events","{""task_fits_in_30min_gap"":true,""scheduled_between"":[""10:00"",""10:30""]}",100%
+TC019,"Task Too Long for Gap","Long task cannot fit in small gap, scheduled elsewhere","{""not_scheduled_in_30min_gap"":true,""scheduled_after"":""12:00""}",100%
+TC020,"No Tasks Edge Case","Empty task list returns empty schedule gracefully","{""block_count"":0,""success"":true,""reasoning"":""No incomplete tasks to schedule""}",100%
+TC021,"Uncategorized Task Fallback","Task without category gets inferred type based on title","{""inferred_type"":""deep"",""title_keyword_matched"":""design"",""fallback_logic_used"":true}",100%
+TC022,"Multiple Errands Bundling","Multiple errands can be grouped into single errand block","{""can_bundle_errands"":true,""total_duration_if_bundled"":50}",100%
+TC023,"Protected Focus Window Compliance","No shallow work scheduled in protected focus windows","{""deep_work_in_focus_window"":true,""admin_not_in_focus_window"":true,""focus_window_protected"":true}",100%
+TC024,"Very Long Deep Work Split","4+ hour deep work may need to be accommodated properly","{""min_duration_minutes"":240,""block_duration_respects_estimate"":true}",100%
+TC025,"Timezone America/New_York","Correctly handles US Eastern timezone","{""timezone_correctly_parsed"":true,""no_overlap_with_9am_meeting"":true}",100%
+TC026,"Timezone Europe/London","Correctly handles UK timezone","{""timezone_correctly_parsed"":true,""within_uk_working_hours"":true}",100%
+TC027,"Overlapping Calendar Events","Handle calendar with overlapping events correctly","{""handles_overlapping_events"":true,""no_task_scheduled_10_to_12"":true}",100%
+TC028,"High Volume - 10 Tasks","Stress test with 10 tasks of mixed types","{""all_10_tasks_scheduled"":true,""no_duplicate_task_ids"":true,""total_duration_matches"":true}",100%
+TC029,"Task ID Hallucination Check","Verify LLM uses exact task IDs from input","{""exact_task_id_used"":""550e8400-e29b-41d4-a716-446655440001"",""no_placeholder_ids"":true,""no_uuid1_uuid2_etc"":true}",100%
+TC030,"Block Title Descriptiveness","Block title should reference actual task name","{""block_title_contains_task_name"":true,""not_generic_like"":[""Deep Work Block"",""Block 1"",""Morning Block""]}",100%
+TC031,"Short Duration Precision","15 minute task should get exactly 15 minutes","{""exact_duration_minutes"":15,""not_rounded_to_30"":true}",0%
+TC032,"Keyword Detection - Call","Call keyword infers meeting type when uncategorized","{""inferred_type"":""meeting"",""keyword_matched"":""call""}",100%
+TC033,"Keyword Detection - Grocery","Grocery keyword infers errand type when uncategorized","{""inferred_type"":""errand"",""keyword_matched"":""grocery""}",100%
+TC034,"Keyword Detection - Strategy","Strategy keyword infers deep work type when uncategorized","{""inferred_type"":""deep"",""keyword_matched"":""strategy""}",100%
+TC035,"Back-to-Back Deep Work Sessions","Two deep work tasks without break should trigger break insertion","{""break_between_blocks"":true,""total_break_time_minutes"":15}",0%
+TC036,"Weekend Day Handling","System handles weekend scheduling correctly","{""saturday_scheduling_works"":true,""respects_custom_hours"":true}",100%
+TC037,"Very Short Working Hours","Handle 4-hour working day correctly","{""fits_in_4_hour_window"":true,""prioritizes_correctly"":true}",100%
+TC038,"Late Night Working Hours","Handle night owl schedule","{""handles_overnight_hours"":true,""scheduled_in_evening"":true}",100%
+TC039,"Duration Calculation Chain-of-Thought","Verify LLM provides correct duration calculation","{""duration_calculation_present"":true,""total_minutes_required"":80,""block_duration_gte_80_mins"":true}",100%
+TC040,"External Bundle Constraint","Respect external bundle constraints from orchestrator","{""respects_bundle_constraint"":true,""admin_not_scheduled_14_to_1530"":true}",100%
+TC041,"Real-World Day - Busy Professional","Complex realistic day for a busy professional","{""all_tasks_scheduled"":true,""no_calendar_overlap"":true,""deep_work_morning"":true}",100%
+TC042,"Real-World Day - Remote Worker","Typical remote worker day","{""pst_timezone_handled"":true,""all_tasks_fit"":true}",100%
+TC043,"Real-World Day - Freelancer","Freelancer with flexible schedule","{""cet_timezone_handled"":true,""deep_work_prioritized"":true}",100%
+TC044,"Conflicting Priorities","Multiple high priority tasks compete for morning slot","{""all_high_priority_scheduled"":true,""reasonable_ordering"":true}",100%
+TC045,"Minimum 60-Min Deep Work Rule","Deep work blocks should be at least 60 minutes","{""deep_block_min_60_mins"":true,""or_task_correctly_categorized"":true}",0%
+TC046,"All Day Event Handling","Handle all-day calendar events correctly","{""handles_all_day_event"":true,""may_block_entire_day"":true}",100%
+TC047,"Interruption Budget Compliance","Respect max daily interruptions setting","{""max_interruptions_respected"":true,""may_batch_low_priority_meetings"":true}",100%
+TC048,"Consecutive Same-Type Tasks","Multiple admin tasks can be in one contiguous block","{""single_admin_block_possible"":true,""total_duration_50_mins"":true,""all_5_task_ids_in_block"":true}",100%
+TC049,"Empty Calendar Many Tasks","Optimize full day with many tasks and no meetings","{""optimal_day_structure"":true,""deep_work_morning"":true,""errands_can_be_bundled"":true}",100%
+TC050,"End-to-End Full Complexity","Ultimate stress test with all features","{""all_8_tasks_scheduled"":true,""no_calendar_overlap"":true,""exact_task_ids_used"":[""uuid-50a"",""uuid-50b"",""uuid-50c"",""uuid-50d"",""uuid-50e"",""uuid-50f"",""uuid-50g"",""uuid-50h""],""deep_work_in_focus_window"":tru",100%

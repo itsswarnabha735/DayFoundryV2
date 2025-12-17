@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Clock, Coffee, Shield, Plus, X, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Clock, Coffee, Shield, Plus, X, RotateCcw, Zap, Calendar } from 'lucide-react';
 import { Button } from '../ui/button';
+import { supabase } from '../../utils/supabase/client';
+import { authManager } from '../../utils/auth';
 import { Card } from '../ui/card';
 import { Slider } from '../ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -165,6 +167,58 @@ export function WorkPreferencesSettings({ onClose }: WorkPreferencesSettingsProp
                         {error || saveError}
                     </div>
                 )}
+
+                {/* AI Model Preference Section */}
+                <Card
+                    style={{
+                        padding: 'var(--df-space-24)',
+                        backgroundColor: 'var(--df-surface)',
+                        borderColor: 'var(--df-border)',
+                        borderRadius: 'var(--df-radius-md)'
+                    }}
+                >
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 rounded-full" style={{ backgroundColor: 'var(--df-surface-alt)' }}>
+                            <Zap size={20} style={{ color: 'var(--df-primary)' }} />
+                        </div>
+                        <div>
+                            <h3 style={{ fontSize: 'var(--df-type-subtitle-size)', fontWeight: 'var(--df-type-subtitle-weight)', color: 'var(--df-text)' }}>
+                                Artificial Intelligence
+                            </h3>
+                            <p style={{ fontSize: 'var(--df-type-caption-size)', color: 'var(--df-text-muted)' }}>
+                                Choose the AI model for scheduling
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h4 style={{ fontSize: 'var(--df-type-body-size)', fontWeight: '600', color: 'var(--df-text)' }}>
+                                    Gemini 3.0 Pro (Beta)
+                                </h4>
+                                <p style={{ fontSize: 'var(--df-type-caption-size)', color: 'var(--df-text-muted)' }}>
+                                    Uses advanced reasoning to handle complex conflicts and logical constraints. May take 10-20s longer.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setLocalPrefs(prev => ({
+                                    ...prev,
+                                    aiPreferences: { model: prev.aiPreferences?.model === 'pro' ? 'standard' : 'pro' }
+                                }))}
+                                className={`w-12 h-6 rounded-full p-1 transition-colors ${localPrefs.aiPreferences?.model === 'pro' ? 'bg-green-500' : 'bg-gray-300'}`}
+                                style={{
+                                    backgroundColor: localPrefs.aiPreferences?.model === 'pro' ? 'var(--df-primary)' : 'var(--df-border)'
+                                }}
+                            >
+                                <div
+                                    className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform ${localPrefs.aiPreferences?.model === 'pro' ? 'translate-x-6' : ''}`}
+                                    style={{ backgroundColor: 'var(--df-primary-contrast)' }}
+                                />
+                            </button>
+                        </div>
+                    </div>
+                </Card>
 
                 {/* Work Hours Section */}
                 <Card
@@ -451,6 +505,39 @@ export function WorkPreferencesSettings({ onClose }: WorkPreferencesSettingsProp
                     </div>
                 </Card>
 
+                {/* Auto-Resolve Settings */}
+                <Card
+                    style={{
+                        padding: 'var(--df-space-24)',
+                        backgroundColor: 'var(--df-surface)',
+                        borderColor: 'var(--df-border)',
+                        borderRadius: 'var(--df-radius-md)'
+                    }}
+                >
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 style={{ fontSize: 'var(--df-type-subtitle-size)', fontWeight: 'var(--df-type-subtitle-weight)', color: 'var(--df-text)' }}>
+                                Auto-Resolve Conflicts
+                            </h3>
+                            <p style={{ fontSize: 'var(--df-type-caption-size)', color: 'var(--df-text-muted)' }}>
+                                Allow agents to automatically fix schedule conflicts
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setLocalPrefs(prev => ({ ...prev, autoResolveConflicts: !prev.autoResolveConflicts }))}
+                            className={`w-12 h-6 rounded-full p-1 transition-colors ${localPrefs.autoResolveConflicts ? 'bg-green-500' : 'bg-gray-300'}`}
+                            style={{
+                                backgroundColor: localPrefs.autoResolveConflicts ? 'var(--df-primary)' : 'var(--df-border)'
+                            }}
+                        >
+                            <div
+                                className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform ${localPrefs.autoResolveConflicts ? 'translate-x-6' : ''}`}
+                                style={{ backgroundColor: 'var(--df-primary-contrast)' }}
+                            />
+                        </button>
+                    </div>
+                </Card>
+
                 {/* Conflict Resolution Style */}
                 <Card
                     style={{
@@ -534,6 +621,182 @@ export function WorkPreferencesSettings({ onClose }: WorkPreferencesSettingsProp
                         ))}
                     </div>
                 </div>
+
+                {/* Debug Actions */}
+                <Card
+                    style={{
+                        padding: 'var(--df-space-24)',
+                        backgroundColor: 'var(--df-surface)',
+                        borderColor: 'var(--df-border)',
+                        borderRadius: 'var(--df-radius-md)',
+                        marginBottom: 'var(--df-space-24)'
+                    }}
+                >
+                    <h3 style={{ fontSize: 'var(--df-type-subtitle-size)', fontWeight: 'var(--df-type-subtitle-weight)', color: 'var(--df-text)', marginBottom: '12px' }}>
+                        Debug Actions
+                    </h3>
+                    <Button
+                        variant="outline"
+                        className="w-full mb-3"
+                        onClick={async () => {
+                            const user = await authManager.getCurrentUser();
+                            if (user) {
+                                const { error } = await supabase.from('proactive_suggestions').insert({
+                                    user_id: user.id,
+                                    type: 'morning_briefing',
+                                    message: 'Good morning! Ready to plan your day?',
+                                    action_type: 'compose_day',
+                                    action_payload: {},
+                                    status: 'pending'
+                                });
+
+                                if (error) {
+                                    console.error('Simulate Suggestion Error:', error);
+                                    alert('Failed to insert suggestion: ' + error.message);
+                                } else {
+                                    alert('Suggestion inserted! Check Dashboard.');
+                                }
+                            }
+                        }}
+                        style={{
+                            borderColor: 'var(--df-primary)',
+                            color: 'var(--df-primary)',
+                            minHeight: '48px'
+                        }}
+                    >
+                        <Zap size={16} className="mr-2" />
+                        Simulate Morning Suggestion
+                    </Button>
+
+                    <Button
+                        variant="outline"
+                        className="w-full mb-3"
+                        onClick={async () => {
+                            const user = await authManager.getCurrentUser();
+                            if (user) {
+                                const { error } = await supabase.from('proactive_suggestions').insert({
+                                    user_id: user.id,
+                                    type: 'unsynced_calendar',
+                                    message: 'You have 3 calendar events not in your plan.',
+                                    action_type: 'sync_calendar',
+                                    action_payload: {},
+                                    status: 'pending'
+                                });
+
+                                if (error) {
+                                    console.error('Simulate Suggestion Error:', error);
+                                    alert('Failed to insert suggestion: ' + error.message);
+                                } else {
+                                    alert('Calendar suggestion inserted! Check Dashboard.');
+                                }
+                            }
+                        }}
+                        style={{
+                            borderColor: 'var(--df-warning)',
+                            color: 'var(--df-warning)',
+                            minHeight: '48px'
+                        }}
+                    >
+                        <Calendar size={16} className="mr-2" />
+                        Simulate Unsynced Calendar
+                    </Button>
+
+                    <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={async () => {
+                            const user = await authManager.getCurrentUser();
+                            if (user) {
+                                const { error } = await supabase.from('proactive_suggestions').insert({
+                                    user_id: user.id,
+                                    type: 'conflict_resolution',
+                                    message: 'Scheduling conflict detected. Tap to resolve.',
+                                    action_type: 'review_conflict',
+                                    action_payload: { alert_id: 'dummy' },
+                                    status: 'pending'
+                                });
+
+                                if (error) {
+                                    console.error('Simulate Suggestion Error:', error);
+                                    alert('Failed to insert suggestion: ' + error.message);
+                                } else {
+                                    alert('Conflict suggestion inserted! Check Dashboard.');
+                                }
+                            }
+                        }}
+                        style={{
+                            borderColor: 'var(--df-danger)',
+                            color: 'var(--df-danger)',
+                            minHeight: '48px'
+                        }}
+                    >
+                        <Shield size={16} className="mr-2" />
+                        Simulate Conflict (Manual)
+                    </Button>
+
+                    <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={async () => {
+                            const user = await authManager.getCurrentUser();
+                            if (user) {
+                                // 1. Create a Schedule Block
+                                const now = new Date();
+                                const start = new Date(now.setHours(now.getHours() + 1, 0, 0, 0)); // Next hour
+                                const end = new Date(now.setHours(now.getHours() + 1, 0, 0, 0));
+
+                                const { data: block, error: blockError } = await supabase.from('schedule_blocks').insert({
+                                    user_id: user.id,
+                                    title: 'Deep Work Session',
+                                    block_type: 'deep_work',
+                                    start_time: start.toISOString(),
+                                    end_time: end.toISOString(),
+                                    is_fixed: true,
+                                    status: 'active'
+                                }).select().single();
+
+                                if (blockError) {
+                                    alert('Failed to create block: ' + blockError.message);
+                                    return;
+                                }
+
+                                // 2. Create a Conflicting Calendar Event
+                                const { data: event, error: eventError } = await supabase.from('calendar_events').insert({
+                                    user_id: user.id,
+                                    title: 'Urgent Team Meeting',
+                                    start_at: start.toISOString(),
+                                    end_at: end.toISOString(),
+                                    source: 'google',
+                                    external_id: 'simulated_' + Date.now()
+                                }).select().single();
+
+                                if (eventError) {
+                                    alert('Failed to create event: ' + eventError.message);
+                                    return;
+                                }
+
+                                // 3. Invoke Guardian
+                                const { error: guardianError } = await supabase.functions.invoke('guardian-check', {
+                                    body: { event_id: event.id, user_id: user.id }
+                                });
+
+                                if (guardianError) {
+                                    alert('Guardian check failed: ' + guardianError.message);
+                                } else {
+                                    alert('Real conflict created! Guardian triggered. Watch for suggestion.');
+                                }
+                            }
+                        }}
+                        style={{
+                            borderColor: 'var(--df-danger)',
+                            color: 'var(--df-danger)',
+                            minHeight: '48px'
+                        }}
+                    >
+                        <Shield size={16} className="mr-2" />
+                        Simulate Real Conflict (End-to-End)
+                    </Button>
+                </Card>
 
                 {/* Reset Button */}
                 <Button

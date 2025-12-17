@@ -389,6 +389,30 @@ export function ErrandsPlanner({ onErrandBundleCreated, selectedDate }: ErrandsP
         }
       }
 
+      // NEW: Create a Schedule Block for this bundle
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error: blockError } = await supabase
+          .from('schedule_blocks')
+          .insert({
+            user_id: user.id,
+            title: `Errands Run (${bundle.errands.length} stops)`,
+            block_type: 'errand',
+            start_time: bundle.suggestedStartTime.toISOString(),
+            end_time: bundle.suggestedEndTime.toISOString(),
+            is_fixed: true,
+            status: 'active',
+            linked_task_ids: taskIds
+          });
+
+        if (blockError) {
+          console.error('Error creating schedule block:', blockError);
+        } else {
+          // Optional: Publish event to bus (if we had the helper here, but direct block is fine for MVP)
+          console.log('Schedule block created for bundle');
+        }
+      }
+
       // Call parent callback
       onErrandBundleCreated(bundle);
 
